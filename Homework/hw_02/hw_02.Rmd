@@ -1,0 +1,205 @@
+---
+title: "second week: Introduction to R and Rstudio"
+subtitle: "Mobile Data"
+author: "Ali Gorji"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/smartphones.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری دوم: تلفن همراه شناسی!
+</h1>
+
+> <p dir="RTL"> 
+ با استفاده از داده های گوشی های همراه به سوالات زیر پاسخ دهید. 
+برای رسم نمودار از پکیج 
+ggplot2
+استفاده کنید.
+</p>
+
+***
+
+<p dir="RTL">
+۱. کدام شرکت بیشترین تعداد گوشی را تولید کرده است؟
+نمودار ستونی ۲۰ شرکت برتر بر حسب تعداد گوشی تولید کرده را رسم کنید.
+</p>
+
+```{r}
+library(dplyr)
+library(ggplot2)
+mobile <- read.csv("mobile_data.csv")
+md <- as.tbl(mobile)
+md %>% group_by(company) %>% count() %>% arrange(desc(n)) %>% head(20) -> top20
+ggplot(top20, aes(x=company, y=n, fill = n)) + geom_col() +coord_flip() + guides(fill = FALSE)
+```
+
+***
+
+<p dir="RTL">
+۲. نمودار زمانی طول عرض  ضخامت و کیفیت دوربین گوشی ها را بکشید
+ و به نمودار هر یک مدل خطی اضافه کنید.
+</p>
+
+```{r}
+md %>% filter(!is.na(year) & !is.na(dim_length) & !is.na(dim_breadth) & !is.na(dim_thickness)) -> yearedmd
+ggplot(yearedmd, aes(y = dim_length, x = year)) + geom_point() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + labs(y = "Length") + geom_smooth(method='lm')
+ggplot(yearedmd, aes(y = dim_breadth, x = year)) + geom_point() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + geom_smooth(method='lm') + labs(y = "Breadth")
+ggplot(yearedmd, aes(y = dim_thickness, x = year)) + geom_point() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + geom_smooth(method='lm') + labs(y = "Thickness")
+```
+
+***
+
+<p dir="RTL">
+۳. نمودار ستونی متوسط قیمت گوشی بر حسب تعداد سیم کارت و دسترسی به 
+LTE
+را رسم نمایید.
+</p>
+
+```{r}
+md %>% filter(price < 5000 & price >0) %>% group_by(LTE, sim_no) %>% summarise(av = sum(price)/n()) %>% select(LTE, sim_no, av) -> sim_price
+ggplot(sim_price, aes(x=sim_no, y=av, fill = LTE))  + geom_col(position = "dodge") + labs(x = "Number of Sim Cards") + labs(y="Average Price")
+```
+
+***
+
+<p dir="RTL">
+۴. نمودار جعبه ایی ضحامت گوشی هایی که در سال ۲۰۱۷ معرفی شده اند را برحسب اینکه کمیت جک هدفون رسم نمایید
+</p>
+
+```{r}
+md %>% filter(year == 2017 & !is.na(audio_jack) & !is.na(dim_thickness)) -> jack2017
+ggplot(jack2017, aes(y=dim_thickness, x=audio_jack))  + geom_boxplot() + labs(y = "Thickness") + labs(x="Having Audio Jack?")
+```
+
+***
+
+<p dir="RTL">
+۵. مفهوم 
+ppi 
+را در گوشی های موبایل محاسبه و هیستوگرام آن را رسم نمایید.
+همچنین نمودار سالانه متوسط این کمیت را بکشید.
+کدام گوشی بیشترین
+ppi
+را دارد؟
+</p>
+
+```{r}
+md %>% mutate(ppi = sqrt(px_row**2 + px_col**2) / display_size) %>% filter(!is.na(ppi)) -> mppi
+ggplot(mppi, aes(x=ppi))  + geom_histogram(fill = "gray") + labs(x = "Count") + labs(y="PPI")
+
+mppi %>% filter(!is.na(year)) %>%  group_by(year) %>% summarise(avg = mean(ppi)) -> yearppi
+ggplot(yearppi, aes(x=as.factor(year), y=avg, fill = as.factor(year))) + geom_col() + labs(y = "Average of PPI") + coord_flip() + guides(fill=FALSE)
+```
+<p dir="RTL">
+و برای مشخص کردن گوشی دارای بالاترین ppi صفحه داریم:
+</p>
+```{r}
+mppi %>% arrange(desc(ppi)) %>% head(1) %>% select(company, device, ppi)
+```
+
+***
+
+<p dir="RTL">
+۶. در گذشته به بعضی از مدل های گوشی نوکیا 
+**گوشکوب**
+گفته می شد. سعی کنید برای این مفهوم کمیتی مناسب تعریف کنید .
+ ده گوشکوب برتر را پیدا کرده و نمودار گوشکوبیت آن را رسم نمایید.
+</p>
+<p dir="RTL">
+من مفهوم گوشکوبیت را برار ضخامت تقسیم بر اندازه صفحه نمایش می دانم. زیرا طبق شهودم گوشی هایی که ضخامت زیادی دارند در مقابل صفحه نمایش کوچکشان احتمالا از مقاومت خوبی برخوردارند و گوشکوب خوبی هستند! پس از بررسی خروجی های به دست آمده از این تعریف به نظرم معیار خوبی برای گوشکوبیت بوده است.
+</p>
+```{r}
+md %>% filter(!is.na(dim_thickness) & !is.na(display_size) & display_size > 1.5) %>% mutate(gushkubiat = dim_thickness/display_size) %>% arrange(desc(gushkubiat)) %>% select(company, device, gushkubiat) %>% head(10) -> top10gushkub
+top10gushkub
+ggplot(top10gushkub, aes(y = gushkubiat, x = device)) + geom_point() + coord_flip()
+```
+
+***
+
+<p dir="RTL">
+۷. آیا تلفن همراهی وجود دارد که در آب غرق نشود؟
+اگر جواب بله هست تمام گوشی های که این خاصیت را دارند بیابید.
+با کشیدن یک نمودار به این سوال پاسخ دهید.
+</p>
+
+```{r}
+md %>% mutate(density = 1000*weight/(dim_length*dim_breadth*dim_thickness)) %>% select(device, density) %>% filter(!is.na(density) & density<3) -> mdensity 
+mdensity %>% filter(density<1)
+ggplot(mdensity, aes(x=density, fill = (density<1))) + geom_histogram(binwidth = 0.02)
+```
+
+***
+<p dir="RTL">
+۸. نمودار پراکنش حجم ذخیره سازی باطری و وزن را رسم نمایید.
+میزان همبستگی بین این دو کمیت را محاسبه کنید.
+</p>
+
+```{r}
+md %>% filter(!is.na(battery_mah) & !is.na(weight)) -> bwd
+ggplot(bwd) + geom_point(aes(x = battery_mah, y = weight), color = "green") + labs(x = "Battery Capacity") + annotate(geom="text", x=2700, y=1100, label=paste0("Correlation = ", cor(bwd$battery_mah, bwd$weight, method = "pearson")), color="blue")
+```
+
+***
+
+<p dir="RTL">
+۹. قیمت پرچمداران یک برند خاص مثلا سامسونگ را بیابید و نمودار قیمت زمان و نام مدل را رسم نمایید.
+</p>
+
+<p dir="RTL">
+بهترین تعریفی که برای پرچمدار به ذهنم رسید، گرانترین موبایل تولید شده در هر سال توسط یک کمپانی بود که به دلیل بهترین خروجی در گوشی های تولید شده توسط اپل، این شرکت برای بررسی در نظر گرفته شد.
+</p>
+```{r}
+md %>% filter(company == "Apple" & display_size >3 & display_size < 7 & !is.na(price)) %>% group_by(year) %>% summarise(price = max(price), model = device[which(price == max(price))]) -> bwd
+bwd
+ggplot(bwd, aes(x = as.factor(year), y = price, color = as.factor(year))) + geom_point() + geom_text(aes(label=model),hjust=.5, vjust=-0.5) + labs(x = "Year") + guides(color=FALSE)
+```
+
+***
+
+<p dir="RTL">
+۱۰. سه نمودار جالب رسم کنید و توضیح دهید چرا از نظر شما جالب است؟
+</p>
+
+<p dir="RTL">
+بررسی روند افزایش تعداد معرفی گوشی ها طی زمان:
+<br>
+نمودار به دست آمده نشان می دهد تا سال ۲۰۱۴ تقریبا تعداد معرفی ها هر ساله با افزایش مواجه بود، در حالی که از سال ۲۰۱۴ تا ۲۰۱۷ این تعداد با کاهش مواجه بوده است.
+</p>
+
+
+```{r}
+md %>% filter(!is.na(year)) %>%  group_by(year) %>% summarise(count = n()) -> yrcountmd
+ggplot(yrcountmd, aes(y = count, x = year)) + geom_freqpoly(stat = "identity", binwidth = 10) + scale_x_continuous(breaks = seq(1990, 2020, by = 1)) + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) 
+```
+
+
+<p dir="RTL">
+بررسی درصد استفاده از سیستم عامل اندروید در دستگاه های مختلف بر حسب زمان:
+<br>
+نمودار جالب به دست آمده نشان می دهد با توجه به اینکه تا سال ۲۰۰۸ درصد استفاده از سیستم عامل اندروید در دستگاه ها به ۰ میل می کرد، این عدد با افزایشی نمایی از سال۲۰۱۲ به ۱۰۰ درصد نزدیک می شود.
+</p>
+
+
+```{r}
+md %>% filter(!is.na(year) & !is.na(os_type)) %>%  group_by(year) %>% summarise(androidusage = sum(os_type == "Android ") / n() * 100) -> androidmd
+ggplot(androidmd, aes(y = androidusage, x = year)) + geom_freqpoly(stat = "identity", binwidth = 10) + scale_x_continuous(breaks = seq(1990, 2020, by = 1)) + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) + labs(y = "Android Usage Percent")
+```
+
+<p dir="RTL">
+قوی ترین باتری های گوشی در ۵ سال اخیر تولید کدام شرکت ها بوده است؟
+<br>
+با بررسی نمودار ۲۰ شرکت برتر در تولید باتری در سال های اخیر به نکته جالبی می رسیم که اکثر این شرکت ها از شرکت های غیر صاحب نام چینی هستند و خبری از پر فروش ترین برندهای بازار گوشی های هوشمند نیست! شاید ظرفیت باتری عامل مهمی برای خریداری شدن توسط کاربران به حساب نمی آید.
+</p>
+
+
+```{r}
+md %>% filter(!is.na(company) & !is.na(battery_mah) & year > 2012 & display_size > 3 & display_size < 7) %>%  group_by(company) %>% summarise(av = mean(battery_mah)) %>% arrange(desc(av)) %>% head(20) -> batterycompany
+ggplot(batterycompany, aes(x=company, y=av, fill = av)) + geom_col() + labs(y = "Android Battery Capacity") + guides(fill=FALSE) + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+```

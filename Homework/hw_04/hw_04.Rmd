@@ -1,0 +1,263 @@
+---
+title: "Fourth Week: Hypothesis Testing"
+subtitle: "TIMSS Analysis"
+author: "Ali Gorji"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/math.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری چهارم: چقدر ریاضی بلدیم و چرا؟
+</h1>
+
+<p dir="RTL"> لطفا مقاله زیر را مطالعه بفرمایید. </p>
+<p dir="RTL">
+[چرایی رتبه ضعیف ایران در آزمون تیمز](https://goo.gl/gX8DZc)
+</p>
+
+> <p dir="RTL"> 
+با استفاده از داده های ارزیابی تیمز ۲۰۱۵ ادعاهای زیر را مورد ارزیابی قراردهید.
+برای هر سوال علاوه بر استدلال آماری که در غالب آزمون فرض تعریف می شود از تصویرسازی مناسب باهر دو ابزار
+ggplot2
+و
+highcharter
+استفاده نمایید.
+به دلخواه به هفت گزاره از موارد زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+۱. میران رضایت معلمان در پیشرفت تحصیلی دانش آموزان موثر است.
+<br>
+از آن جایی  که میزان رضایت معلمان سوالی با جواب های سه گزینه ای است با ANOVA Test بررسی می کنیم که آیا نتایج وابسته از جواب این سوال است یا خبر
+<br>
+با اینکه اختلاف کمی میان میانگین ها مشاهده می شود اما ANOVA test فرض عدم ارتباط بین میزان رضایت شغلی و موفقیت را رد می کند.
+</p>
+```{r, warning=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(highcharter)
+library(labelled)
+bcg = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/bcg.rds") #school
+bsa = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/bsa.rds") 
+bsg = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/bsg.rds") #student
+bsr = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/bsr.rds") #student result, choice of students
+bst = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/bst.rds") #student results
+btg = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/btm.rds") #teacher
+bts = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/data/bts.rds") #non mathematic teachers
+
+timss = read_rds("~/Documents/Sharif/Term 6/Data Analysis/Homework/hw_04/files/timss_2015.rds")
+
+bst %>% mutate(mathSuccess = (bsmmat01 + bsmmat02 + bsmmat03 + bsmmat04 + bsmmat05)/5) %>% select(idcntry, idbook, idschool, idclass, idstud, idtealin, mathSuccess) -> studentSuccess
+btg %>% filter(btdgtjs < 4) %>%  select(idcntry, idschool, idtealin, teacherSatisfaction = btdgtjs) -> teacherSatisfaction #lower is better
+full_join(teacherSatisfaction, studentSuccess) -> joined1
+summary(aov(mathSuccess ~ as.factor(teacherSatisfaction) ,data = joined1))
+joined1 %>% group_by(teacherSatisfaction) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(teacherSatisfaction)) %>%  ggplot(aes(x = as.factor(teacherSatisfaction), y = Score)) + geom_point() + labs(x="Teacher Satisfaction") + scale_x_discrete(breaks = 1:3, labels = c("Very Satisfied", "Satisfied", "Less than Satisfied")) + theme_minimal()
+joined1 %>% group_by(teacherSatisfaction) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(teacherSatisfaction)) %>% hchart("point",hcaes(x = as.factor(teacherSatisfaction), y = Score)) %>% 
+  hc_add_theme(hc_theme_ffx()) %>% 
+  hc_xAxis(categories = c("Very Satisfied", "Satisfied", "Less than Satisfied"), title = list(text = "Job Satisfaction")) %>% 
+  hc_legend(enabled = TRUE)
+```
+<p dir="RTL">
+با توجه به کم بودن مقدار pvalue و همینطور توجه به تست می توان دید که میزان موفقیت دانش آموزان مستقل از رضایت شغلی معلمان نیست.
+</p>
+***
+
+<p dir="RTL">
+۲. والدینی که تحصیلات بیشتری دارند دارای فرزندان موفق تری می باشند.
+<br>
+با کمک تست anova مشخص می کنیم که عامل تحصیلات والدین بر موفقیت دانش آموزان تاثیر گذار است. سپس با گرفتن T Test نشان می دهیم اینکه تحصیلات بیشتر باعث موفقیت کمتر دانش آموزان می شود غلط است. سپس این نتیجه را با نمودار نشان می دهیم.
+</p>
+```{r, warning=FALSE}
+bsg %>% filter(bsdgedup<6) %>% select(idcntry, idbook, idschool, idclass, idstud , parentEducation = bsdgedup) -> parentEdu #lower is better
+full_join(parentEdu, studentSuccess) %>% group_by(idcntry, idbook, idschool, idclass, idstud) %>% slice(1) ->joined2
+for(i in 1:4){
+  joined2 %>% filter(parentEducation==i | parentEducation==i+1) %>% t.test(mathSuccess ~ parentEducation, data = ., alt = "greater") %>% print()
+}
+joined2 %>% group_by(parentEducation) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(parentEducation)) %>% ggplot(aes(x = as.factor(parentEducation), y = Score, fill = as.factor(parentEducation))) + geom_col() +coord_flip() + labs(x="Parent Education") + scale_x_discrete(breaks = 1:5, labels = c("University or Higher", "Post-secondary but not University", "Upper Secondary", "Lower Secondary", "Some Primary,\n Lower Secondary \nor No School")) + theme_linedraw() + guides(fill=FALSE)
+joined2 %>% group_by(parentEducation) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(parentEducation)) %>% hchart("column",hcaes(x = as.factor(parentEducation), y = Score), name = "Parent Education") %>% 
+  hc_add_theme(hc_theme_sandsignika()) %>% 
+  hc_xAxis(categories = c("University or Higher", "Post-secondary but not University", "Upper Secondary", "Lower Secondary", "Some Primary, Lower Secondary or No School"), title = list(text = "Parent Education")) %>% 
+  hc_legend(enabled = TRUE)
+```
+
+***
+
+<p dir="RTL">
+۳. امکانات رفاهی در خانه موجب پیشرفت تحصیلی می گردد.
+<br>
+امکانات رفاهی به صورت عددی پیوسته اندازه گیری شده است که با کمک کوریلیشن تست ارتباط خطی بین موفقیت و امکانات رفاهی را می یابیم. این ارتباط در نمودار این پارامتر ها نیز واضح است.
+</p>
+```{r, warning=FALSE}
+bsg %>% filter(bsbgher != 999999) %>% select(idcntry, idbook, idschool, idclass, idstud , homeResource = bsbgher) -> homeResource #higher is better
+full_join(homeResource, studentSuccess) %>% group_by(idcntry, idbook, idschool, idclass, idstud) %>% slice(1) -> joined3
+cor.test(joined3$mathSuccess, joined3$homeResource, alternative = "two.sided", method = "pearson")
+joined3 %>% group_by(homeResource) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(homeResource)) %>%  ggplot(aes(x = homeResource, y = Score)) + geom_point() + geom_smooth(method='lm') + labs(x="Home Resource")
+
+joined3 %>% group_by(homeResource) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(homeResource))  %>%  hchart("point",hcaes(x = homeResource, y = Score)) %>% 
+  hc_add_theme(hc_theme_db()) %>% 
+  hc_xAxis(title = list(text = "Home Resources"))
+```
+***
+
+<p dir="RTL">
+۴. محیط آرام مدرسه نقش مهمی در پیشرفت تحصیلی دارد.
+<br>
+correlation test نشان می دهد که محیط آرام مدرسه نقش مهمی در پیشرفت تحصیلی دارد. نمودار نیز تا حدی گویای این مسئله و شیب مثبت پیشرفت با بهبود اوضاع مدرسه است.
+</p>
+```{r, warning=FALSE}
+bsg %>% filter(bsbgsb!=999999) %>% select(idcntry, idbook, idschool, idclass, idstud ,schoolEnv = bsbgsb) -> schoolEnv #higher is better
+full_join(schoolEnv, studentSuccess) %>% group_by(idcntry, idbook, idschool, idclass, idstud) %>% slice(1) -> joined4
+cor.test(joined4$mathSuccess, joined4$schoolEnv, alternative = "two.sided", method = "pearson")
+joined4 %>% group_by(schoolEnv) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(schoolEnv)) %>%  ggplot(aes(x = schoolEnv, y = Score)) + geom_point() + geom_smooth(method='lm') + labs(x="School Environment")
+
+joined4 %>% group_by(schoolEnv) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(schoolEnv))  %>%  hchart("point",hcaes(x = schoolEnv, y = Score)) %>% 
+  hc_add_theme(hc_theme_db()) %>% 
+  hc_xAxis(title = list(text = "School Environment")) %>% 
+  hc_plotOptions(series = list(marker = list(radius = 2)))
+```
+***
+
+<p dir="RTL">
+۵. معلمان با تحصیلات  بالاتر یا تجربه بیشتر دانش آموزان موفق تری تربیت می کنند.
+<br>
+هر دو این عوامل باعث افزایش موفقیت دانش آموزان می شود. تحصیلات که دسته بندی شده است و با کمک ANOVA Test و چند TTest بررسی شد، و تجربه که پیوسته است و با کمک correlation test ارتباط آن بررسی شد.
+</p>
+```{r, warning=FALSE}
+btg %>% filter(btbg01!=99 & btbg04 < 8) %>% select(idcntry, idschool, idtealin, teacherExperience = btbg01, teacherAcademic = btbg04) -> teacherExpAca #higher is better in exp and lower is better in academic
+full_join(teacherExpAca, studentSuccess) %>% group_by(idcntry, idbook, idschool, idclass, idstud) -> joined5
+# testing teacherAcademic first with anova and then with t.test for more details
+summary(aov(mathSuccess ~ as.factor(teacherExperience), data = joined5))
+for(i in 1:6){
+  joined5 %>% filter(teacherAcademic==i | teacherAcademic==i+1) %>% t.test(mathSuccess ~ teacherAcademic, data = ., alt = "less") %>% print()
+}
+joined5 %>% group_by(teacherAcademic) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(teacherAcademic)) %>%  ggplot(aes(x = as.factor(teacherAcademic), y = Score)) + geom_col() + labs(x="Academic Degrees") + scale_x_discrete(breaks = 1:7, labels = c("Did not complete Upper secondary", "Upper secondary", "Post-secondary, non-tertiary", "Short-cycle tertiary", "Bachelor’s or equivalent", "Master’s or equivalent", "Doctor or equivalent")) + theme_dark() + coord_flip()
+joined5 %>% group_by(teacherAcademic) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(teacherAcademic)) %>% hchart("bar",hcaes(x = as.factor(teacherAcademic), y = Score)) %>% 
+  hc_add_theme(hc_theme_monokai()) %>% 
+  hc_xAxis(categories = c("Did not complete Upper secondary", "Upper secondary", "Post-secondary, non-tertiary", "Short-cycle tertiary", "Bachelor’s or equivalent", "Master’s or equivalent", "Doctor or equivalent"), title = list(text = "Teacher Academic Background"))
+
+# testing teacherExperience with correlation test
+cor.test(joined5$mathSuccess, joined5$teacherExperience, alternative = "two.sided", method = "pearson")
+joined5 %>% group_by(teacherExperience) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(teacherExperience)) %>%  ggplot(aes(x = teacherExperience, y = Score)) + geom_point() + labs(x="Teaching Experience") + geom_smooth(method = "lm") + theme_minimal()
+
+joined5 %>% group_by(teacherExperience) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(teacherExperience)) %>%  hchart("point",hcaes(x = teacherExperience, y = Score)) %>% 
+  hc_add_theme(hc_theme_google()) %>% 
+  hc_xAxis(title = list(text = "Teaching Experience")) 
+```
+
+***
+
+<p dir="RTL"> 
+۶. پسران در کاربرد هندسه قوی تر هستند.
+<br>
+T Test این فرض را نمی تواند اثبات کند و با توجه به نزدیکی میانگین ها می توان گفت احتمالن پسر یا دختر بودن در موفقیت سوالات هندسه تاثیری ندارد!
+</p>
+```{r, warning=FALSE}
+timss %>% filter(topic_area == "Geometric Shapes" & cognitive_domain == "Applying") %>% select(female = correct_ratio_per_question_female, male = correct_ratio_per_question_male) %>% tidyr::gather("female","male",key = "gender",value = "score") -> girlsvsboys
+t.test(score ~ gender,data = girlsvsboys,alt = "greater")
+girlsvsboys %>% group_by(gender) %>% summarise(mean = mean(score) %>% round(3)) %>% 
+  hchart("column",hcaes(x = gender,y = mean), name = "score") %>% 
+  hc_add_theme(hc_theme_economist())
+girlsvsboys %>% group_by(gender) %>% summarise(mean = mean(score) %>% round(3)) %>% ggplot(aes(x = gender, y = mean, fill = gender)) + geom_col() + theme_minimal()
+```
+
+***
+
+<p dir="RTL"> 
+۷. تغذیه دانش آموزان نقش اساسی در یادگیری آنها دارد. 
+</p>
+
+***
+
+<p dir="RTL"> 
+۸. مدارس با امکانات بیشتر دارای عملکرد بهتری می باشند.
+</p>
+
+***
+
+<p dir="RTL"> 
+۹. علت افت تحصیلی عدم مشارکت در کلاس است.
+</p>
+
+***
+
+<p dir="RTL"> 
+۱۰. دانش آموزان ایرانی در استدلال قوی تر از کاربرد هستند.
+<br>
+T Test نشان می دهد این فرض رد می شود و می توان گفت دانش آموزان ایرانی در کاربرد قوی تر از استدلال عمل می کنند! نمودار نیز گویای این مسئله است.
+</p>
+```{r, warning=FALSE}
+timss %>% filter(Country == "Iran, Islamic Rep. of" & cognitive_domain == "Reasoning") %>% select(question, reasoning = correct_ratio_per_question) -> reasoningTable
+timss %>% filter(Country == "Iran, Islamic Rep. of" & cognitive_domain == "Applying") %>% select(question, applying = correct_ratio_per_question) -> applyingTable
+full_join(reasoningTable, applyingTable) %>% select(reasoning, applying) %>% tidyr::gather("reasoning","applying",key = "type",value = "score") %>% filter(!is.na(score)) -> reasoningvsapplying
+t.test(score ~ type, data = reasoningvsapplying, alt = "greater")
+reasoningvsapplying %>% group_by(type) %>% summarise(mean = mean(score) %>% round(3)) %>% 
+  hchart("column",hcaes(x = type,y = mean), name = "score") %>% 
+  hc_add_theme(hc_theme_darkunica())
+reasoningvsapplying %>% group_by(type) %>% summarise(mean = mean(score) %>% round(3)) %>% ggplot(aes(x = type, y = mean)) + geom_col() + theme_dark()
+```
+
+***
+
+<p dir="RTL">
+سه گزاره جالب کشف کنید و ادعای خود را ثابت نمایید.
+</p>
+<p dir="RTL">
+موفقیت در درس ریاضی در علاقه دانش آموزان به درس فیزیک موثر است!
+<br>
+correlation test نشان می دهد که علاقه به درس فیزیک بی ارتباط با نمرات ریاضی نیست.با این که میانگین نشان داده شده در نمودار تا حدی این مسئله را نشان نمی دهد، اما نتایج T Test کاملا این فرض را تایید می کند.
+</p>
+```{r, warning=FALSE}
+bsg %>% filter(bsdgslp < 4) %>% select(idcntry, idbook, idschool, idclass, idstud , likePhysics = bsdgslp) -> likePhysics
+full_join(likePhysics, studentSuccess) %>% group_by(idcntry, idbook, idschool, idclass, idstud) %>% slice(1) -> joinedp1
+for(i in 1:2){
+  joined2 %>% filter(parentEducation==i | parentEducation==i+1) %>% t.test(mathSuccess ~ parentEducation, data = ., alt = "greater") %>% print()
+}
+  joinedp1 %>% group_by(likePhysics) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(likePhysics)) %>% ggplot(aes(x = as.factor(likePhysics), y = Score, fill = as.factor(likePhysics))) + geom_point() + labs(x="How about Physics?") + scale_x_discrete(breaks = 1:3, labels = c("Very Much Like Learning Physics", "Like Learning Physics", " Do Not Like Learning Physics")) + theme_bw() + guides(fill=FALSE)
+joinedp1 %>% group_by(likePhysics) %>% summarise(Score = mean(mathSuccess)) %>% filter(!is.na(likePhysics)) %>% hchart("point",hcaes(x = as.factor(likePhysics), y = Score), name = "How about physics?") %>% 
+  hc_add_theme(hc_theme_tufte2()) %>% 
+  hc_xAxis(categories =  c("Very Much Like Learning Physics", "Like Learning Physics", " Do Not Like Learning Physics")) %>% 
+  hc_legend(enabled = TRUE)
+
+```
+
+<p dir="RTL">
+دانش آموزان مدارس دارای مکان انجام تکالیف موفق تر هستند!
+<br>
+correlation test نشان می دهد که علاقه به درس فیزیک بی ارتباط با نمرات ریاضی نیست.
+</p>
+```{r, warning=FALSE}
+bcg %>% filter(bcbg08a <3) %>% select(idcntry, idschool, place = bcbg08a) -> place
+full_join(studentSuccess, place) %>% group_by(idcntry, idschool) -> joinedp2
+t.test(mathSuccess ~ place,data = joinedp2,alt = "greater")
+joinedp2 %>% group_by(place) %>% summarise(mean = mean(mathSuccess, na.rm = TRUE) %>% round(3)) %>% 
+  hchart("column",hcaes(x = place,y = mean)) %>% 
+  hc_add_theme(hc_theme_elementary()) %>% 
+  hc_xAxis(categories = c("","Have", "Doesn't Have"), title = list(text = "Have place for doing homework"))
+joinedp2 %>% group_by(place) %>% summarise(mean = mean(mathSuccess, na.rm = TRUE)) %>% filter(!is.na(place)) %>% ggplot(aes(x = as.factor(place), y = mean)) + geom_col() + theme_minimal() + scale_x_discrete(1:2,labels = c("Yes", "No")) + labs(x = "Having place for doing homeworks")
+```
+
+<p dir="RTL">
+معلم های زن مربی های بهتری برای ریاضی هستند!
+<br>
+T Test نشان می دهد معلم های زن دانش آموزان موفق تری در ریاضی دارند.
+</p>
+```{r, warning=FALSE}
+btg %>% filter(btbg02 < 3) %>%  select(idcntry, idschool, idtealin, sex = btbg02) -> teacherSex #lower is better
+full_join(teacherSex, studentSuccess) -> joinedp3
+t.test(mathSuccess ~ sex,data = joinedp3,alt = "great")
+joinedp3 %>% group_by(sex) %>% summarise(mean = mean(mathSuccess, na.rm = TRUE)) %>% filter(!is.na(sex)) %>% 
+  hchart("column",hcaes(x = sex,y = mean)) %>% 
+  hc_add_theme(hc_theme_sandsignika()) %>% 
+  hc_xAxis(categories = c("", "Female", "Male"), title = list(text = "Sex of Teachers"))
+joinedp3 %>% group_by(sex) %>% summarise(mean = mean(mathSuccess, na.rm = TRUE)) %>% filter(!is.na(sex)) %>% ggplot(aes(x = as.factor(sex), y = mean)) + geom_col() + theme_light() + scale_x_discrete(1:2,labels = c("Female", "Male"))
+```

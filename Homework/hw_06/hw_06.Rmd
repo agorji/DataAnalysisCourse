@@ -1,0 +1,195 @@
+---
+title: "Sixth Week: Linear Models"
+subtitle: "House price prediction"
+author: "Ali Gorji"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/house.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده های قیمت منازل
+لطفا با سوالات زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+۱. ماتریس همبستگی متغیرهای مختلف را به دست آورده و سپس رسم نمایید.
+اعداد به دست آمده را با آزمون فرض معناداری همبستگی بسنجید و سپس ده متغیری که همبستگی بالاتری با قیمت دارند را مشخص نمایید.
+</p>
+
+```{r}
+library(readr)
+library(car)
+library(ggplot2)
+library(highcharter)
+library(dplyr)
+house = read.csv("house/train.csv")
+numericed_house = house %>% select_if(is.numeric)
+cor(numericed_house, use = "complete.obs")
+cor_result = c()
+for(param in colnames(numericed_house)){
+    cor_result = c(cor_result, cor.test(numericed_house$SalePrice, numericed_house[, param])$estimate)
+}
+price_cor = data.frame(parameter = colnames(numericed_house), correlation = cor_result)
+price_cor %>% arrange(desc(correlation)) %>% top_n(11) -> top_correlation
+```
+
+***
+
+<p dir="RTL">
+۲. در یک تصویر نمودار پراکنش دو به دو ده متغیر بدست آمده به همراه قیمت را رسم نمایید و هم خطی بودن متغیرها را بررسی کنید
+</p>
+<p dir="RTL">
+با توجه به نمودار زیر می توان دید که قیمت با OverallQual، X1stFlrSF و TotalBsmtSF رابطه خطی خوبی ندارد.
+<br>
+(به نظر می رسد!)
+</p>
+```{r}
+reduced_house <- numericed_house[,as.character(top_correlation$parameter)]
+plot(reduced_house)
+```
+
+***
+
+<p dir="RTL">
+۳. یک مدل خطی بر اساس ده متغیر برای پیش بینی قیمت برازش دهید. و سپس خلاصه نتایج مدل را به دست آورید.
+</p>
+```{r}
+fit = lm(SalePrice ~ OverallQual + GrLivArea + GarageCars + GarageArea + TotalBsmtSF + X1stFlrSF + FullBath + TotRmsAbvGrd + YearBuilt + YearRemodAdd, data = reduced_house)
+summary(fit)
+```
+***
+
+<p dir="RTL">
+۴. نمودار قیمت واقعی و قیمت پیش بینی را رسم نمایید و خوب بودن مدل را ارزیابی کنید.
+</p>
+```{r}
+yhat = predict(fit)
+comparison_dataframe = data.frame(Real = reduced_house$SalePrice, Prediction = yhat)
+ggplot(comparison_dataframe) + geom_point(aes(x = Real, y= Prediction))
+```
+***
+
+<p dir="RTL">
+۵. مقدار
+R-squared
+ مدل را به دست آورید. آیا بر اساس این کمیت مدل به خوبی به داده ها برازش داده شده است؟
+ کمیت
+ F-statistic
+ را در خلاصه مدل تفسیر نمایید.
+</p>
+
+<p dir="RTL">
+به طور کلی نمی توان بر اساس مقدار R-squared در مورد کیفیت فیت شدن داده ها نظر دقیقی داد. مقدار R-squared نشان دهنده این است که نسبت واریانس خطا به واریانس متغیر مستقل ما است و هر چه مقدار آن بیشتر باشد نشان می دهد واریانس در خطا ها کمتر از واریانس در متغیر مستقلمان است و احتمالا فیت بهتری انجام داده ایم. ولی در مجموع نمی توان بر اساس آن یک مدل را مدلی خوب یا بد نامید. در این جا نیز این مقدار در حدی بالا هست تا کمی از مدل ساخته شده اطمینان خاطر بیشتری پیدا کنیم!
+<br>
+در حالی که R-squared یک تخمینی از میزان قوت رابطه بین مدل و مقدار واقعی متغیر مستقل ارائه می کند، تست F مشخص می کند آیا این رابطه از نظر آماری قابل توجه هست یا نه و بر اساس آن تستی ارائه می کند. در واقع F-statistic نشان می دهد داده ها تا چه میزان از میانگین فاصله دارند و مقدار بالای آن نشان دهنده پراکندگی بیشتر داده ها است. این تست مشخص با این فرض که در کنار هم قرار گرفتن این متغیر های مستقل تاثیری در بهبود وضعیت مدل ندارد به بررسی کنار هم قرار گرفتن آن ها می پردازد.
+<br>
+در اینجا با توجه به پایین بودن مقدار p-value برای تست F، می توانیم به این نتیجه برسیم که در کنار هم قرار گرفتن این متغیر های مستقل می تواند مدل خوبی به ما بدهد. این نتیجه باعث می شود مقدار R-squared به دست آمده نیز قابل اعتماد تر شود و با خیال راحت آن را به عنوان معیاری از خوب بودن مدل در نظر بگیریم!
+</p>
+
+```{r}
+
+summary(fit)$r.squared
+summary(fit)
+```
+***
+
+<p dir="RTL">
+۶. بر اساس
+p-value
+ سطح معناداری ضرایب تصمیم بگیرید که چه متغیرهایی در مدل سازی استفاده شود.
+بر اساس متغیرهای جدید دوباره مدل سازی کنید و نتایج رو گزارش دهید.
+</p>
+<p dir="RTL">
+به نظر می آید حذف پارامترهایی با p-value بیش از ۰.۰۵ بتواند به بهبود مدل کمک کند. پس مدل جدیدی را بر این اساس تعریف می کنیم. با اینکار مقادیر p-value ها برای متغیر های مختلف کمتر شد ولی تغییر خاصی در مقدار R-squared رخ نداد.
+</p>
+```{r}
+summary(fit)
+new_fit = lm(SalePrice ~ OverallQual + GrLivArea + GarageCars + TotalBsmtSF + X1stFlrSF + FullBath + YearBuilt + YearRemodAdd, data = reduced_house)
+summary(new_fit)
+```
+
+***
+
+<p dir="RTL">
+۷. مدل خود را بر اساس باقی مانده نقص یابی کنید.
+سه محک 
+normality, independance, Constant Variance
+ را در نقص یابی خود در نظر بگیرید.
+</p>
+<p dir="RTL">
+با توجه به نمودار به دست آمده از qqplot، می بینیم در انتهای خط داده ها از خط فاصله می گیرند و نمی توانیم داده ها را پیرو توزیع نرمال بدانیم! در ادامه نیز واریانس ها را برای متغیر های مختلف در نظر می گیریم تا هم خطی متغیر های مختلف را نسبت به هم در نظر بگیریم و می بینیم سه متغیر GrLivArea، GarageArea و GarageArea بسیار شبیه به هم هستند و استقلال ندارند. در ادامه نیز با توجه به نمودار می توانیم بگویم خطا ثابت نیست (واریانس ثابتی ندارد)
+```{r}
+qqPlot(fit, id.method="identify", simulate = TRUE, main="Q-Q Plot")
+vif(fit)
+hchart(reduced_house$SalePrice - predict(new_fit, reduced_house))
+```
+***
+
+<p dir="RTL">
+۸. داده ها را به پنج قسمت تقسیم کنید. بر اساس چهار قسمت مدل خطی را بسازید و صحت مدل را برای یک قسمت 
+باقی مانده را تست کنید. خطای پیش بینی شما چقدر است؟
+</p>
+```{r}
+reduced_house = reduced_house %>% arrange(SalePrice)
+reduced_house = reduced_house[sample(nrow(reduced_house)),]
+train <- reduced_house %>% slice(1:as.integer(0.8 * count(reduced_house)))
+test <- reduced_house %>% slice(as.integer(0.8 * count(reduced_house)) : as.integer(count(reduced_house)))
+train_fit = lm(SalePrice ~ OverallQual + GrLivArea + GarageCars + TotalBsmtSF + X1stFlrSF + FullBath + YearBuilt + YearRemodAdd, data = train)
+summary(train_fit)
+#We also omit FullBath
+train_fit = lm(SalePrice ~ OverallQual + GrLivArea + GarageCars + TotalBsmtSF + X1stFlrSF + YearBuilt + YearRemodAdd, data = train)
+summary(predict(train_fit, test)-test$SalePrice)
+```
+<p dir ="RTL">
+با توجه به بازه خطای به دست آمده به نظر می رسد مدل خوبی به دست آمده و خطای پیشبینی قابل قبول است.
+</p>
+***
+
+<p dir="RTL"> 
+۹. آیا قیمت ربط غیر خطی با یکی از ده متغیر استفاده شده دارد؟
+بر اساس دستاوردهای خود مدل را بهتر نمایید.
+</p>
+<p dir="RTL">
+برای مشخص کردن این منظور می توانیم از تست کوریلیشن استفاده کنیم ولی برای بهتر مشخص شدن مسئله از ویژوالیزیشن استفاده می کنیم. پس نمودار قیمت و پارامترهای مدل را کشیده و بررسی می کنیم:
+</p>
+```{r}
+train %>% plot()
+```
+<p dir="RTL">
+با توجه به نمودار به دست آمده از کنار هم قرار گرفتن پارامتر های مختلف، به نظر می رسد متغیر OverallQual رابطه نمایی با قیمت داشته باشد و می توانیم این مسئله را در مدل لحاظ کنیم. خروجی به دست آمده نشان می دهد مقدار R-squared کمی بهبود یافته است.
+</p>
+```{r}
+new_train_fit = lm(SalePrice ~ exp(OverallQual) + GrLivArea + GarageCars + TotalBsmtSF + X1stFlrSF + YearBuilt + YearRemodAdd, data = train)
+summary(new_train_fit)
+```
+
+***
+
+<p dir="RTL"> 
+۱۰. بر اساس مدل نهایی به دست آمده نتایج پیش بینی خود را بر روی
+test.csv
+به دست آورید و در سایت 
+kaggle
+ در مسابقه 
+ House Prices: Advanced Regression Techniques
+بارگذاری نمایید. سپس لینک رتبه و عدد آن را ضمیمه تمرین کنید.
+</p>
+
+```{r}
+test = read.csv("house/test.csv")
+colnames(test)[44] = "X1stFlrSF"
+kaggle_output = data.frame(test$Id)
+kaggle_output$SalePrice = predict(new_train_fit, test)
+colnames(kaggle_output) = c("Id", "SalePrice")
+kaggle_output[is.na(kaggle_output)] = 178000
+write_csv(kaggle_output, "output.csv")
+```

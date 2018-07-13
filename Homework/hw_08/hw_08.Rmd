@@ -1,0 +1,425 @@
+---
+title: "Eighth Week: Text Analysis in R"
+subtitle: "To be, or not to be"
+author: "Ali Gorji"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/dickens1_1.png"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با استفاده از بسته gutenberg داده های لازم را به دست آورید و به سوالات زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+۱. چارلز دیکنز نویسنده معروف انگلیسی بالغ بر چهارده رمان (چهارده و نیم) نوشته است. متن تمامی کتاب های او را دانلود کنید و سپس بیست لغت برتر استفاده شده را به صورت یک نمودار ستونی نمایش دهید. (طبیعتا باید ابتدا متن را پاکسازی کرده و stopping words را حذف نمایید تا به کلماتی که بار معنایی مشخصی منتقل می کنند برسید.)
+</p>
+
+```{r message=FALSE, warning=FALSE}
+library(gutenbergr)
+library(tm)
+library(wordcloud2)
+library(stringr)
+library(dplyr)
+library(highcharter)
+library(tidytext)
+library(tidyr)
+library(ngram)
+library(ggplot2)
+
+gutenberg_works() %>% filter(author == "Dickens, Charles")
+ThePickwickPapers = gutenberg_download(580)
+OliverTwist = gutenberg_download(730)
+NicholasNickleby = gutenberg_download(967)
+TheOldCuriosityShop = gutenberg_download(700)
+BarnabyRudge = gutenberg_download(917)
+MartinChuzzlewit = gutenberg_download(968)
+DombeyandSon = gutenberg_download(821)
+DavidCopperfield =gutenberg_download(766)
+BleakHouse =gutenberg_download(1023)
+HardTimes =gutenberg_download(786)
+LittleDorrit =gutenberg_download(963)
+ATaleofTwoCities = gutenberg_download(98)
+GreatExpectations = gutenberg_download(1400)
+OurMutualFriend = gutenberg_download(883)
+TheMysteryofEdwinDrood = gutenberg_download(564)
+
+text = c(ThePickwickPapers$text, OliverTwist$text, NicholasNickleby$text, TheOldCuriosityShop$text, BarnabyRudge$text, MartinChuzzlewit$text, DombeyandSon$text, DavidCopperfield$text, BleakHouse$text, HardTimes$text, LittleDorrit$text, ATaleofTwoCities$text, GreatExpectations$text, GreatExpectations$text, OurMutualFriend$text, TheMysteryofEdwinDrood$text) %>%tolower()
+
+stopWords = stopwords() %>% c("mr", "mrs", "sir", "well", "doctor", "miss", "will", "might", "must")
+removeStopWords = function(inputText){
+  cleaned = tolower(inputText)
+  for(word in stopWords){
+    word = paste("\\b",word,"\\b",sep = "")
+    cleaned = str_remove_all(cleaned, word)
+  }
+  cleaned = str_replace_all(cleaned, "[[:punct:]]", " ")
+  for(word in c("s", "d")){
+    word = paste("\\b",word,"\\b",sep = "")
+    cleaned = str_remove_all(cleaned, word)
+  }
+  return(cleaned)
+}
+full_text = removeStopWords(text)
+
+makeWordFrame = function(inputText){
+  word_list <- str_split(inputText, "\\s+") %>% unlist()
+  word.frame <- word_list[word_list!=""] %>% table() %>% as.data.frame(stringsAsFactors = F) %>% arrange(desc(Freq)) %>% return()
+}
+word.frame = makeWordFrame(full_text)
+hchart(word.frame %>% top_n(20) %>% select(Word = c(1), Frequency = Freq), type = "column", hcaes(Word, Frequency))
+```
+
+
+***
+
+<p dir="RTL">
+۲. ابر لغات ۲۰۰ کلمه پرتکرار در رمان های چارلز دیکنز را رسم نمایید. این کار را با بسته wordcloud2 انجام دهید. برای دانلود می توانید به لینک زیر مراجعه کنید.
+</p>
+
+https://github.com/Lchiffon/wordcloud2
+
+
+<p dir="RTL">
+ با استفاده از عکسی که در ابتدا متن آمده ابر لغاتی مانند شکل زیر رسم کنید. (راهنمایی: از ورودی figpath در دستور wordcloud2 استفاده نمایید.مثالی در زیر آورده شده است.)
+</p>
+
+<div align="center">
+<img  src="images/tag-word-cloud-Che-Guevara.jpg"  align = 'center'>
+</div>
+
+
+```{r}
+wordcloud2(word.frame %>% head(200), size = 0.4, figPath = "images/Dickens.jpg", color = "black")
+```
+***
+
+<p dir="RTL">
+۳. اسم پنج شخصیت اصلی در هر رمان دیکنز را استخراج کنید و با نموداری تعداد دفعات تکرار شده بر حسب رمان را رسم نمایید. (مانند مثال کلاس در رسم اسامی شخصیت ها در سری هر پاتر)
+</p>
+
+<p dir="RTL">
+برای مشخص کردن نام شخصیت های اصلی از دو فرض استفاده کردیم؛ نام اشخاص با حروف بزرگ شروع می شوند، شخصیت های اصلی بیشتر نامشان در داستان آورده شده است. بر این اساس نام شخصیت های اصلی کتاب های مختلف را بر اساس میزان تکرارشان در نمودار های زیر مشاهده می کنید:
+</p>
+
+```{r}
+ThePickwickPapersCharacters = grep("[A-Z]", str_replace_all(ThePickwickPapers$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(ThePickwickPapersCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+OliverTwistCharacters = grep("[A-Z]", str_replace_all(OliverTwist$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(OliverTwistCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+NicholasNicklebyCharacters = grep("[A-Z]", str_replace_all(NicholasNickleby$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(NicholasNicklebyCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+TheOldCuriosityShopCharacters = grep("[A-Z]", str_replace_all(TheOldCuriosityShop$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(TheOldCuriosityShopCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+BarnabyRudgeCharacters = grep("[A-Z]", str_replace_all(BarnabyRudge$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(BarnabyRudgeCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+MartinChuzzlewitCharacters = grep("[A-Z]", str_replace_all(MartinChuzzlewit$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(MartinChuzzlewitCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+DombeyandSonCharacters = grep("[A-Z]", str_replace_all(DombeyandSon$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(DombeyandSonCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+DavidCopperfieldCharacters = grep("[A-Z]", str_replace_all(DavidCopperfield$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(DavidCopperfieldCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+BleakHouseCharacters = grep("[A-Z]", str_replace_all(BleakHouse$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(BleakHouseCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+HardTimesCharacters = grep("[A-Z]", str_replace_all(HardTimes$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(HardTimesCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+LittleDorritCharacters = grep("[A-Z]", str_replace_all(LittleDorrit$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(LittleDorritCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+ATaleofTwoCitiesCharacters = grep("[A-Z]", str_replace_all(ATaleofTwoCities$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(ATaleofTwoCitiesCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+GreatExpectationsCharacters = grep("[A-Z]", str_replace_all(GreatExpectations$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(GreatExpectationsCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+OurMutualFriendCharacters = grep("[A-Z]", str_replace_all(OurMutualFriend$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(OurMutualFriendCharacters, type = "pie", hcaes(x = Name, y = Freq))
+
+TheMysteryofEdwinDroodCharacters = grep("[A-Z]", str_replace_all(TheMysteryofEdwinDrood$text, "[[:punct:]]", " ") %>%  str_split("\\s+") %>% unlist(), value = T) %>% table() %>%  as.data.frame(stringsAsFactors = F) %>% select(Name = c(1), Freq) %>% mutate(LowCaseName = tolower(Name)) %>% filter(!(LowCaseName %in% stopWords)) %>% arrange(desc(Freq)) %>% select(Name, Freq) %>% head(5)
+hchart(TheMysteryofEdwinDroodCharacters, type = "pie", hcaes(x = Name, y = Freq))
+```
+
+
+***
+
+<p dir="RTL">
+۴.  در بسته tidytext داده ایی به نام sentiments وجود دارد که فضای احساسی لغات را مشخص می نماید. با استفاده از این داده نمودار ۲۰ لغت برتر negative و ۲۰ لغت برتر positive را در کنار هم رسم نمایید. با استفاده از این نمودار فضای حاکم بر داستان چگونه ارزیابی می کنید؟ (به طور مثال برای کتاب داستان دو شهر فضای احساسی داستان به ترتیب تکرر در نمودار زیر قابل مشاهده است.)
+</p>
+
+<div align="center">
+<img  src="images/sentiments.png"  align = 'center'>
+</div>
+
+<p dir="RTL">
+در دو نمودار اول به ترتیب بیست لغت مثبت و منفی پرتکرار را مشخص می کنم و سپس به ازای هر کتاب نمودار فضای حاکم بر داستان را بررسی می کنیم.
+
+```{r}
+addSentiment = function(wordFrame){
+  wordFrame %>% select(word = c(1), Freq) %>% full_join(sentiments) %>% filter(!is.na(sentiment) & !is.na(Freq)) %>% select(word, Freq, sentiment) %>% return()
+}
+countSentiment = function(wordFrame){
+  sentimentAdded <- addSentiment(wordFrame)
+  sentimentAdded %>% group_by(sentiment) %>% summarise(count = sum(Freq)) %>% arrange(desc(count)) %>% return()
+}
+full_stories_added_Sentiment = addSentiment(word.frame)
+hchart(full_stories_added_Sentiment %>% filter(sentiment == "positive") %>% top_n(20), type = "bar", hcaes(x = word, y= Freq))
+hchart(full_stories_added_Sentiment %>% filter(sentiment == "negative") %>% top_n(20), type = "bar", hcaes(x = word, y= Freq))
+
+ThePickwickPapersSentiment <- ThePickwickPapers$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(ThePickwickPapersSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+OliverTwistSentiment <- OliverTwist$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(OliverTwistSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+NicholasNicklebySentiment <- NicholasNickleby$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(NicholasNicklebySentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+TheOldCuriosityShopSentiment <- TheOldCuriosityShop$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(TheOldCuriosityShopSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+BarnabyRudgeSentiment <- BarnabyRudge$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(BarnabyRudgeSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+MartinChuzzlewitSentiment <- MartinChuzzlewit$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(MartinChuzzlewitSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+DombeyandSonSentiment <- DombeyandSon$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(DombeyandSonSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+DavidCopperfieldSentiment <- DavidCopperfield$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(DavidCopperfieldSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+BleakHouseSentiment <- BleakHouse$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(BleakHouseSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+HardTimesSentiment <- HardTimes$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(HardTimesSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+LittleDorritSentiment <- LittleDorrit$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(LittleDorritSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+ATaleofTwoCitiesSentiment <- ATaleofTwoCities$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(ATaleofTwoCitiesSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+GreatExpectationsSentiment <- GreatExpectations$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(GreatExpectationsSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+OurMutualFriendSentiment <- OurMutualFriend$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(OurMutualFriendSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+
+TheMysteryofEdwinDroodSentiment <- TheMysteryofEdwinDrood$text %>% removeStopWords() %>% makeWordFrame() %>%  countSentiment()
+hchart(TheMysteryofEdwinDroodSentiment, type = "bar", hcaes(x = sentiment, y= count)) %>% hc_add_theme(hc_theme_handdrawn())
+```
+
+
+***
+
+<p dir="RTL">
+۵. متن داستان بینوایان را به ۲۰۰ قسمت مساوی تقسیم کنید. برای هر قسمت تعداد لغات positive و negative را حساب کنید و سپس این دو سری زمانی را در کنار هم برای مشاهده فضای احساسی داستان رسم نمایید.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+LesMiserable = gutenberg_download(135)
+cleaned_LesMiserable = removeStopWords(LesMiserable$text)
+lesmiserable.frame = makeWordFrame(cleaned_LesMiserable)
+chunkLength = ceiling(length(cleaned_LesMiserable)/200)
+chunkedLesmiserable = split(cleaned_LesMiserable, ceiling((seq(length(cleaned_LesMiserable)))/ chunkLength))
+positivity = c()
+negativity = c()
+for (chunk in chunkedLesmiserable) {
+  chunk.frame = makeWordFrame(chunk)
+  positivity = c(positivity, (countSentiment(chunk.frame) %>% filter(sentiment == "positive"))$count[1]) 
+  negativity = c(negativity, (countSentiment(chunk.frame) %>% filter(sentiment == "negative"))$count[1])
+}
+
+highchart() %>% hc_add_series(data = data.frame(chunk = 1:length(positivity),  positivity), type = "line", hcaes(x=chunk, y=positivity), name = "Positivity") %>% hc_add_series(data = data.frame(chunk = 1:length(negativity),  negativity), type = "line", hcaes(x=chunk, y=negativity), name = "Negativity")
+```
+
+
+***
+
+<p dir="RTL">
+۶. ابتدا ترکیبات دوتایی کلماتی که پشت سر هم می آیند را استخراج کنید و سپس نمودار ۳۰ جفت لغت پرتکرار را رسم نمایید.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+twoGrams = data.frame(text = text) %>% unnest_tokens(bigram, text, token = "ngrams", n = 2)
+cleanedTwoGrams = twoGrams %>% separate(bigram, c("First", "Second"), sep = " ") %>% filter(!(First %in% stopWords) & !(Second %in% stopWords))
+
+countedTwoGrams = cleanedTwoGrams %>% group_by(First, Second) %>% summarise(count = n()) %>% arrange(desc(count)) %>% head(30) %>% mutate(word = paste(First, Second)) %>% select(word, count)
+hchart(countedTwoGrams, "bar", hcaes(x = word, y = count))
+```
+
+
+***
+
+<p dir="RTL">
+۷. جفت کلماتی که با she و یا he آغاز می شوند را استخراج کنید. بیست فعل پرتکراری که زنان و مردان در داستان های دیکنز انجام می دهند را استخراج کنید و نمودار آن را رسم نمایید.
+</p>
+
+```{r}
+sheVerbs = twoGrams %>% separate(bigram, c("First", "Second"), sep = " ") %>% filter(First == "she" & !(Second %in% stopWords)) %>% group_by(Second) %>% summarise(count = n()) %>% select(verb = Second, count) %>% arrange(desc(count)) %>%  head(20)
+heVerbs = twoGrams %>% separate(bigram, c("First", "Second"), sep = " ") %>% filter(First == "he" & !(Second %in% stopWords)) %>% group_by(Second) %>% summarise(count = n()) %>% select(verb = Second, count) %>% arrange(desc(count)) %>%  head(20)
+hchart(sheVerbs, "bar", hcaes(x = verb, y = count))
+hchart(heVerbs, "bar", hcaes(x = verb, y = count))
+```
+
+
+***
+
+<p dir="RTL">
+۸. برای کتاب های دیکنز ابتدا هر فصل را جدا کنید. سپی برای هر فصل 
+1-gram, 2-gram
+را استخراج کنید. آیا توزیع  N-gram
+در کارهای دیکنز یکسان است؟ با رسم نمودار هم این موضوع را بررسی کنید.
+</p>
+<p dir="RTL">
+با توجه به اینکه منظور سوال به طور کاملی بیان نشده بود برداشت بنده از این سوال به دست آوردن توزیع تکرار کلمات در بخش های مختلف و مقایسه آن ها بود. همینطور به دلیل مسائل پردازشی و یکسان بودن عملیات برای کتاب های مختلف، سه سوال آخر بر روی یکی از کتاب های نویسنده ها پردازش را انجام می دهیم و از در نظر گرفتن سایر کتاب ها می پرهیزیم.
+</p>
+
+
+```{r}
+ThePickwickPapersChapters = str_split(paste(removeStopWords(ThePickwickPapers$text)[210:length(ThePickwickPapers$text)], collapse = ' '),"\\bchapter\\b")[[1]]
+DickensOneGrams = data.frame()
+DickensTwoGrams = data.frame()
+for(i in 1:length(ThePickwickPapersChapters)){
+  chapter = ThePickwickPapersChapters[i]
+  if(nchar(chapter)<500)
+    next()
+  tempOneGrams = data.frame(text = chapter) %>% unnest_tokens(word, text, token = "ngrams", n = 1) %>% table() %>% as.data.frame(stringsAsFactors = F)
+  tempTwoGrams = data.frame(text = chapter) %>% unnest_tokens(word, text, token = "ngrams", n = 2) %>% table() %>% as.data.frame(stringsAsFactors = F)
+  tempOneGrams$chapter <- i
+  tempTwoGrams$chapter <- i
+  DickensOneGrams = rbind(DickensOneGrams, tempOneGrams)
+  DickensTwoGrams = rbind(DickensTwoGrams, tempTwoGrams)
+}
+ggplot(DickensOneGrams) + geom_density(aes(Freq)) + facet_wrap(~chapter)
+ggplot(DickensTwoGrams) + geom_density(aes(Freq)) + facet_wrap(~chapter)
+summary(aov(Freq ~ as.factor(chapter), data = DickensOneGrams))
+summary(aov(Freq ~ as.factor(chapter), data = DickensTwoGrams))
+```
+<p dir="RTL">
+با توجه به دو تست آنوا زده شده برای n-gram به نظر می رسد توزیع نمی تواند در تمامی فصل ها یکسان باشد. اما اگر خطا های موجود را در نظر نگیریم، با توجه به نمودار های به دست آمده به نظر می رسد تا حد خوبی می توانیم شباهت در توزیع تکرار کلمات در فصل های مختلف  ببینیم.
+</p>
+
+***
+
+<p dir="RTL"> 
+۹. برای آثار ارنست همینگوی نیز تمرین ۸ را تکرار کنید. آیا بین آثار توزیع n-grams در بین آثار این دو نویسنده یکسان است؟
+</p>
+
+<p dir="RTL"> 
+به دلیل عدم وجود کتاب های همینگوی در کتابخانه معرفی شده، از کتاب اما نوشته جین آستین برای بررسی در این بخش استفاده می کنیم.
+</p>
+
+
+```{r message=FALSE, warning=FALSE}
+Emma = gutenberg_download(158)
+EmmaChapters = str_split(paste(removeStopWords(Emma$text), collapse = ' '),"\\bchapter\\b")[[1]]
+AustenOneGrams = data.frame()
+AustenTwoGrams = data.frame()
+for(i in 1:length(EmmaChapters)){
+  chapter = EmmaChapters[i]
+  if(nchar(chapter)<500)
+    next()
+  tempOneGrams = data.frame(text = chapter) %>% unnest_tokens(word, text, token = "ngrams", n = 1) %>% table() %>% as.data.frame(stringsAsFactors = F)
+  tempTwoGrams = data.frame(text = chapter) %>% unnest_tokens(word, text, token = "ngrams", n = 2) %>% table() %>% as.data.frame(stringsAsFactors = F)
+  tempOneGrams$chapter <- i
+  tempTwoGrams$chapter <- i
+  AustenOneGrams = rbind(AustenOneGrams, tempOneGrams)
+  AustenTwoGrams = rbind(AustenTwoGrams, tempTwoGrams)
+}
+ggplot(AustenOneGrams) + geom_density(aes(Freq)) + facet_wrap(~chapter)
+ggplot(AustenTwoGrams) + geom_density(aes(Freq)) + facet_wrap(~chapter)
+summary(aov(Freq ~ as.factor(chapter), data = AustenOneGrams))
+summary(aov(Freq ~ as.factor(chapter), data = AustenTwoGrams))
+```
+<p dir="RTL">
+حال برای هر دو کتاب به عنوان نماینده ای از آثار هر یک از نویسنده ها، توزیع 1-gram و 2-gram برای کل کتاب را در نظر می گیریم و با هم مقایسه می کنیم.
+</p>
+```{r}
+AustenOneGrams$Author <- "Austen"
+AustenTwoGrams$Author <- "Austen"
+DickensOneGrams$Author <- "Dickens"
+DickensTwoGrams$Author <- "Dickens"
+oneGrams = rbind(AustenOneGrams, DickensOneGrams)
+twoGrams = rbind(AustenTwoGrams, DickensTwoGrams)
+ggplot(oneGrams) + geom_density(aes(Freq)) + facet_wrap(~Author) 
+ggplot(twoGrams) + geom_density(aes(Freq)) + facet_wrap(~Author)
+t.test(Freq ~ Author, oneGrams)
+t.test(Freq ~ Author, twoGrams)
+```
+<p dir="RTL">
+نتیجه تست نشان می دهد اختلاف فاحشی بین توزیع هم در 1-gram و هم در 2-gram بین هر دو نویسنده وجود دارد و نمودار هم تا حدی این مسئله را بیان می کند.
+</p>
+
+***
+
+<p dir="RTL"> 
+۱۰. بر اساس دادهایی که در تمرین ۸ و ۹ از آثار دو نویسنده به دست آوردید و با استفاده از  N-gram ها یک مدل لاجستیک برای تشخیص صاحب اثر بسازید. خطای مدل چقدر است؟ برای یادگیری مدل از کتاب کتاب الیور تویست اثر دیکنز و کتاب پیرمرد و دریا استفاده نکنید. پس از ساختن مدل برای تست کردن فصل های این کتابها را به عنوان داده ورودی به مدل بدهید. خطای تشخیص چقدر است؟
+</p>
+
+<p dir="RTL"> 
+با برداشتی که در سوالات قبل از توزیع داشتیم، مدل را بر اساس فرکانس استفاده از کلمات برتر بر اساس رنکشان در نظر می گیریم. به این صورت که فرکانس بیست کلمه پر استفاده برای هر چپتر را برای یادگیری استفاده می کنیم.
+فصل دهم هر دو کتاب در نظر گرفته شده را در داده هایمان لحاظ نمی کنیم و در نهایت از آن ها برای تست مدلمان استفاده می کنیم.
+</p>
+
+```{r}
+library(h2o)
+h2o.init()
+
+temp=DickensOneGrams %>% group_by(Author,chapter) %>% arrange(chapter, Author, desc(Freq)) %>% filter(row_number() <= 20) %>% mutate(rank = row_number())
+rankedDickensOneGram <- data.frame(chapter = unique(temp$chapter), Author = "Dickens", gram = 1)
+for(i in 1:20){
+  rankedDickensOneGram[,paste("Rank", i, sep="")] = (temp %>% filter(rank == i))$Freq
+}
+temp=DickensTwoGrams %>% group_by(Author,chapter) %>% arrange(chapter, Author, desc(Freq)) %>% filter(row_number() <= 20) %>% mutate(rank = row_number())
+rankedDickensTwoGram <- data.frame(chapter = unique(temp$chapter), Author = "Dickens", gram = 2)
+for(i in 1:20){
+  rankedDickensTwoGram[,paste("Rank", i, sep="")] = (temp %>% filter(rank == i))$Freq
+}
+
+temp=AustenOneGrams %>% group_by(Author,chapter) %>% arrange(chapter, Author, desc(Freq)) %>% filter(row_number() <= 20) %>% mutate(rank = row_number())
+rankedAustenOneGram <- data.frame(chapter = unique(temp$chapter), Author = "Austen", gram = 1)
+for(i in 1:20){
+  rankedAustenOneGram[,paste("Rank", i, sep="")] = (temp %>% filter(rank == i))$Freq
+}
+temp=AustenTwoGrams %>% group_by(Author,chapter) %>% arrange(chapter, Author, desc(Freq)) %>% filter(row_number() <= 20) %>% mutate(rank = row_number())
+rankedAustenTwoGram <- data.frame(chapter = unique(temp$chapter), Author = "Austen", gram = 2)
+for(i in 1:20){
+  rankedAustenTwoGram[,paste("Rank", i, sep="")] = (temp %>% filter(rank == i))$Freq
+}
+
+data = rbind(rankedDickensOneGram, rankedAustenOneGram) %>% rbind(rankedDickensTwoGram) %>% rbind(rankedAustenTwoGram)
+
+h2otrain <- as.h2o(data %>% filter(chapter!=10) %>% mutate(Author = as.factor(Author)))
+hglm = h2o.glm(y = "Author", x = colnames(data),
+                training_frame =  h2otrain , family="binomial", nfolds = 5)
+hglm
+```
+
+```{r}
+h2o.predict(hglm, as.h2o(data %>% filter(chapter == 10)))
+```
+
+<p dir="rtl">
+طبق مدل به دست آمده حداکثر دقت حدودا برابر ۸۷ درصد است و نتیجه پیش بینی برای فصل دهم کتاب ها در یک مورد درست نبود.
+</p>

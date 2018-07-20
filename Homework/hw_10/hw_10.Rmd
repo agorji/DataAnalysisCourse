@@ -1,0 +1,429 @@
+---
+title: "Cluster Analysis"
+subtitle: "WDI Indicators"
+author: "Ali Gorji"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/best_hans_talks_1200x627.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده بانک جهانی به سوالات زیر پاسخ دهید. برای استفاده از داده از سه فایل زیر استفاده نمایید.
+داده نام کشورها: WDICountry
+داده نام سری های زمانی: WDISeries
+داده کل: WDIData
+در صورتی که داده را در اختیار ندارید می توانید از بسته WDI استفاده نموده و داده های مورد نظر را استخراج نمایید.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(highcharter)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+WDICountry = read_csv("WDI_csv/WDICountry.csv")
+WDISeries = read_csv("WDI_csv/WDISeries.csv")
+WDIData = read_csv("WDI_csv/WDIData.csv")
+```
+
+
+***
+
+<p dir="RTL">
+۱. ده کشور فقیر دنیا را بیابید. نمودار درآمد روزانه آنها را رسم کنید. چند درصد از اعضای این کشورها زیر خط فقر هستند؟ متوسط عمر در این کشورها چقدر است؟
+</p>
+```{r message=FALSE, warning=FALSE}
+WDISeries %>% filter(Topic == "Poverty: Poverty rates")
+Data = WDIData %>% rowwise() 
+WDIData %>% filter(`Indicator Code` == "SI.POV.NAHC") %>% rowwise() %>%  mutate(Average = mean(c(`2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) %>% arrange(desc(Average)) %>% head(10) %>% .$`Country Name` -> pour_countries
+
+#Income
+WDIData %>% filter(`Indicator Code` == "BM.GSR.FCTY.CD" & `Country Name` %in% pour_countries) %>% rowwise() %>% mutate(Average = mean(c(`2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) %>% filter(!is.na(Average)) -> poorIncome
+  
+hchart(poorIncome %>% select(Country = `Country Name`, AverageIncome = Average), type = "column", hcaes(x = Country, y = AverageIncome)) %>% hc_add_theme(hc_theme_flat())
+
+#Poverty line
+WDIData %>% filter(`Indicator Code` == "SI.POV.RUHC" & `Country Name` %in% pour_countries) %>% rowwise() %>% mutate(Average = mean(c(`2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) %>% filter(!is.na(Average)) -> poorPovertyline
+hchart(poorIncome %>% select(Country = `Country Name`, AverageUnderPovertyLinePercent = Average), type = "column", hcaes(x = Country, y = AverageUnderPovertyLinePercent)) %>% hc_add_theme(hc_theme_flat())
+
+#Average Life Expectance
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.IN" & `Country Name` %in% pour_countries) %>% rowwise() %>% mutate(Average = mean(c(`2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) %>% filter(!is.na(Average)) -> poorPovertyline
+hchart(poorIncome %>% select(Country = `Country Name`, AverageLifeExpectance = Average), type = "column", hcaes(x = Country, y = AverageLifeExpectance)) %>% hc_add_theme(hc_theme_flat())
+```
+
+***
+
+<p dir="RTL">
+۲. تراژدی روآندا: بر اساس داده های امید به زندگی ابتدا نمودار سالانه نمودار جعبه ایی امید به زندگی کشورها را رسم نمایید(در یک نمودار!). سپس سری زمانی امید به زندگی روآندا را به آن اضافه کنید. چه می بینید؟ چند میلیون نفر کشته شدند؟
+</p>
+
+```{r}
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.IN")  %>% .[,-c(2:4,62,63)] %>% gather(`Country Name`) %>% select(Year = `Country Name`, value) %>% filter(!is.na(value)) -> globalStat
+
+WDIData %>% filter(`Country Name` == "Rwanda" & `Indicator Code` == "SP.DYN.LE00.IN") %>% .[,-c(2:4,62,63)] %>% gather(`Country Name`) %>% select(Year = `Country Name`, value) -> rwandaStat
+
+ggplot() + geom_boxplot(data = globalStat, aes(Year, value), color = "green") + geom_point(data = rwandaStat, aes(Year, value), color = "red") + theme_minimal() + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5), legend.position="bottom") + ylab("Life Expectance")
+```
+<p dir="RTL">
+طبق نمودار از سال ۱۹۸۴ تا سال ۱۹۹۳ رواندا با افت امید به زندگی مواجه بود که با بررسی تاریخ این کشور متوجه می شویم از سال ۱۹۹۰ رواندا درگیر جنگ داخلی می شود. تراژدی رواندا که نسل کشی عظیمی بود که در سال ۱۹۹۷ به وقوع پیوست و حدود ۵۰۰ هزار تا ۱.۳ میلیون نفر طی آن کشته شدند، به شکل نقطه ای برای افزایش امید به زندگی در سیر تغییرات امید به زندگی در این کشور دیده می شود که با توجه به نمودار از سال ۱۹۹۴ تا اکنون این کشور با رشد امید به زندگی موجه بوده است.
+</p>
+
+
+***
+
+<p dir="RTL">
+۳. نمودار امید به زندگی و هزینه های بهداشتی را رسم کنید. چه نتیجه ایی می گیرید؟
+</p>
+
+```{r}
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.IN") %>% rowwise() %>% mutate(Average = mean(c(`2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) %>% filter(!is.na(Average)) %>% select(Country = `Country Name`, AverageLifeExpectance = Average) -> lifeExpectance
+WDIData %>% filter(`Indicator Code` == "SH.XPD.CHEX.GD.ZS") %>% rowwise() %>% mutate(Average = mean(c(`2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) %>% filter(!is.na(Average)) %>% select(Country =`Country Name`, AverageHealthExpenditure = Average) -> healthExpenditure
+mergedData = merge(lifeExpectance, healthExpenditure) %>% arrange(desc(AverageLifeExpectance))
+highchart() %>% hc_add_series(mergedData, type = "line", hcaes(x = Country, y = AverageLifeExpectance), name = "Life Expectance") %>% hc_add_series(mergedData, type="line", hcaes(x = Country, y = AverageHealthExpenditure), name = "Health Expenditure")
+```
+
+<p dir="RTL">
+با مقایسه امید به زندگی و درصد بودجه اختصاص داده شده به بخش سلامت نتوانستیم به نتیجه خاصی برسیم. شاید انجام این بررسی با میزان بودجه اختصاص داده شده به بخش سلامت نتایج بهتری بدهد که شاخص مربوط به آن در شاخص ها موجود نبود.
+</p>
+
+
+***
+
+<p dir="RTL">
+۴. آیا قدرت خرید خانواده های ایرانی در ۵۰ سال اخیر افزایش یافته است؟ برای این کار از داده های اقتصادی خانوار استفاده کنید.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+WDIData %>% filter(`Indicator Code` == "NE.CON.PRVT.PP.KD" & `Country Name` == "Iran, Islamic Rep.") %>% gather() -> purchasePowerData
+purchasePowerData$key = as.numeric(purchasePowerData$key)
+purchasePowerData$value = as.numeric(purchasePowerData$value)
+hchart(purchasePowerData[35:61,] %>% select(Year = key, PurchasePower = value), "line", hcaes(Year, PurchasePower)) %>% hc_add_theme(hc_theme_sandsignika())
+``` 
+<p dir="RTL">
+داده های ۵۰ سال اخیر برای این شاخص در ۵۰ سال اخیر موجود نبود اما داده های ۲۵ سال اخیر نشان دهنده این افزایش در قدرت خرید مردم هستند.
+</p>
+
+
+***
+
+<p dir="RTL">
+۵. رشد اقتصادی ایران را با کشورهای دیگر در طول ۲۰ سال گذشته بر حسب بیست شاخص های اقتصادی مهم مانند تولید ناخالص ملی، تورم و … ارزیابی کنید! (برای هر شاخص از تصویرسازی استفاده کنید.)
+</p>
+<p dir="RTL">
+ابتدا شاخص های اقتصادی که در ایران از سال ۱۹۹۵ تا ۲۰۱۶ اندازه گیری شده اند را مشخص می کنیم تا از بین آن ها ۲۰ شاخص مهم را انتخاب کنیم.
+</p>
+
+```{r}
+economicIndicators = WDISeries %>% filter(str_detect(Topic, "Economic") | str_detect(Topic, "Financial"))
+fullDataEconomicIndicators = WDIData %>% filter(`Indicator Code` %in% economicIndicators$`Series Code` & `Country Name` == "Iran, Islamic Rep.") %>% .[,c(1,3,4,40:61)] %>% na.omit()
+```
+<p dir="RTL">
+حال از میان شاخص های به دست آمده بیست شاخص را انتخاب می کنیم و به ادامه بررسی می پردازیم
+</p>
+```{r}
+selectedEconomicIndicators <- c("Agriculture, value added (% of GDP)",
+                                "Exports of goods and services (% of GDP)",
+                                "GDP (current US$)",
+                                "GDP growth (annual %)",
+                                "GDP per capita (current US$)",
+                                "GNI, Atlas method (current US$)",
+                                "Grants, excluding technical cooperation (BoP, current US$)",
+                                "Imports of goods and services (% of GDP)",
+                                "Industry, value added (% of GDP)",
+                                "Inflation, GDP deflator (annual %)",
+                                "Inflation, consumer prices (annual %)",
+                                "Net ODA received per capita (current US$)",
+                                "Services, etc., value added (% of GDP)",
+                                "Technical cooperation grants (BoP, current US$)",
+                                "Gross capital formation (% of GDP)",
+                                "Gross domestic income (constant LCU)",
+                                "Gross domestic savings (current LCU)",
+                                "Gross national expenditure (% of GDP)",
+                                "Household final consumption expenditure (annual % growth)",
+                                "Manufacturing, value added (% of GDP)"
+                                )
+# check wether selected appropriate indicators
+selectedEconomicIndicators %in% fullDataEconomicIndicators$`Indicator Name`
+for(indicator in selectedEconomicIndicators){
+  iran = fullDataEconomicIndicators %>% filter(`Indicator Name` == indicator) %>% .[,4:25] %>% gather()
+  world = WDIData %>% filter(`Indicator Name` == indicator) %>% summarise(`1995` = mean(`1995`, na.rm = T), `1996` = mean(`1996`, na.rm = T), `1997` = mean(`1997`, na.rm = T), `1998` = mean(`1998`, na.rm = T), `1999` = mean(`1999`, na.rm = T), `2000` = mean(`2000`, na.rm = T), `2001` = mean(`2001`, na.rm = T), `2002` = mean(`2002`, na.rm = T), `2003` = mean(`2003`, na.rm = T), `2004` = mean(`2004`, na.rm = T),`2005` = mean(`2005`, na.rm = T) ,`2006` = mean(`2006`, na.rm = T), `2007` = mean(`2007`, na.rm = T), `2008` = mean(`2008`, na.rm = T), `2009` = mean(`2009`, na.rm = T), `2010` = mean(`2010`, na.rm = T), `2011` = mean(`2011`, na.rm = T), `2012` = mean(`2012`, na.rm = T), `2013` = mean(`2013`, na.rm = T), `2014` = mean(`2014`, na.rm = T), `2015` = mean(`2015`, na.rm = T), `2016` = mean(`2016`, na.rm = T)) %>% gather()
+  iran$key = as.integer(iran$key)
+  world$key = as.integer(world$key)
+  print(ggplot() + geom_line(data = iran, aes(key, value, color = "Iran")) + geom_line(data = world, aes(key, value, color = "World")) + xlab("Year") + ylab(indicator) + theme_minimal())
+}
+```
+
+
+***
+
+<p dir="RTL">
+۶. در قسمت قبل با استفاده از روش خوشه بندی k-means داده ها را به سه دسته تقسیم کنید. ایران در کدام دسته می گنجد؟ (پیش از خوشه بندی طبیعتا داده را باید پاکسازی و استاندارد سازی نمایید.)
+</p>
+<p dir="RTL">
+در مقادیر اندازه گیری شده برای کشورها دسته های تجمعی ای وجود دارد که مشخص کننده مقدار شاخص ها در مناطق است. با کمک مقایسه کردن مقادیر برای مناطق ایران را با این مناطق مقایسه می کنیم تا تشخیص دهیم در کدام دسته قرار می گیرد.
+</p>
+
+```{r}
+clustering.matrix = matrix(ncol = 20, nrow = 48)
+rownames(clustering.matrix) = c(unique(WDIData$`Country Name`)[1:47], "Iran")
+colnames(clustering.matrix) = selectedEconomicIndicators
+i = 1
+for(indicator in selectedEconomicIndicators){
+  iran = mean((fullDataEconomicIndicators %>% filter(`Indicator Name` == indicator) %>% .[,4:25] %>% gather())$value)
+  WDIData %>% filter(`Indicator Name` == indicator) %>% rowwise() %>% mutate(Average = mean(c(`1995`, `1996`,`1997` ,`1998`, `1999`, `2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) -> average
+  clustering.matrix[,i] = c(average$Average[1:47], iran)
+  i=i+1
+}
+#remove NA columns
+clustering.matrix = clustering.matrix[, -c(7,14,16,17,18)]
+clustering.matrix = na.omit(clustering.matrix)
+cluster.frame = data.frame(Class = rownames(clustering.matrix), Cluster = kmeans(clustering.matrix, 3)$cluster)
+cluster.frame %>% filter(Cluster == 3)
+```
+
+***
+
+<p dir="RTL">
+۷. به وسیله تحلیل مولفه اصلی بعد داده رو به دو کاهش دهید سپس خوشه های به دست آمده در قسمت قبل را بر روی آن نمایش دهید. آیا عملکرد روش خوشه بندی شما مطلوب بوده است؟
+</p>
+```{r}
+economicIndicator.pca = prcomp(clustering.matrix)
+pca.cluster.frame = data.frame(Class = rownames(clustering.matrix), PC1 = economicIndicator.pca$x[,1], PC2 = economicIndicator.pca$x[,2], Cluster = cluster.frame$Cluster)
+hchart(pca.cluster.frame, type = "point", hcaes(PC1, PC2, color = Cluster, group = Class)) %>% hc_legend(enabled = F)
+```
+<p dir="RTL">
+به نظر می رسد خوشه بندی تا حد خوبی دقیق بوده است. بالا بردن تعداد گروه ها در k-means می توانست گروه های دقیق تری بدهد ولی در حال حاضر داده ها تقریبا به سه دسته اعضای پیمان های خاص، اروپا و آمریکای شمالی، کشورهای در حال توسعه شامل آسیا، خاورمیانه و آمریکای جنوبی تقسیم شده اند.
+</p>
+***
+
+<p dir="RTL">
+۸. با استفاده از داده روشی برای پیش بینی رشد اقتصادی ایران در سال آینده ارائه دهید.
+</p>
+<p dir="RTL">
+از یک مدل خطی فیت شده بر اساس داده های سال های مختلف ایران استفاده می کنیم که بر اساس سال میزان رشد GDP را تعیین می کند و بر این اساس میزان رشد را برای سال 2019 حدس می زنیم.
+</p>
+
+```{r}
+WDIData %>% filter(`Country Name` == "Iran, Islamic Rep." & `Indicator Name` == "GDP growth (annual %)") %>% .[,6:61] %>% gather() %>% select(Year = key, GDPGrowth = value) %>% mutate(Year = as.integer(Year)) %>% lm(formula = GDPGrowth ~ Year) -> GDPGrowth.lm
+summary(GDPGrowth.lm)
+predict(GDPGrowth.lm, data.frame(Year = c(2019)))
+```
+<p dir="RTL">
+مدل خوبی از داده های موجود به دست نیامد ولی با این حال این مدل میزان پیشرفت شاخص تولید ناخالص ملی یعنی GND را برابر حدود ۰.۶ درصد برای سال آینده پیش بینی کرده است.
+</p>
+
+***
+
+<p dir="RTL"> 
+۹. سوالهای ۵ تا ۷ را ابتدا برای ۲۰ شاخص سلامت سپس بر حسب ۲۰ شاخص آموزشی تکرار کنید.
+</p>
+<p dir="RTL"> 
+شاخص های سلامت و آموزش که داده های کافی برای آن ها موجود است:
+</p>
+```{r}
+healthIndicators = WDISeries %>% filter(str_detect(Topic, "Health"))
+fullDataHealthIndicators = WDIData %>% filter(`Indicator Code` %in% healthIndicators$`Series Code` & `Country Name` == "Iran, Islamic Rep.") %>% .[,c(1,3,4,40:61)] %>% na.omit()
+
+educationIndicators = WDISeries %>% filter(str_detect(Topic, "Education"))
+fullDataEducationIndicators = WDIData %>% filter(`Indicator Code` %in% educationIndicators$`Series Code` & `Country Name` == "Iran, Islamic Rep.") %>% .[,c(1,3,4,40:61)] %>% na.omit()
+```
+<p dir="RTL">
+حال از میان این شاخص ها چند شاخص را انتخاب می کنیم و بررسی ها را بر روی آن ها انجام می دهیم. از آن جایی که در میان شاخص های آموزش تنها ۵ شاخص دارای اطلاعات مورد نیاز هستند مجبوریم تعداد را به ۵ شاخص کاهش دهیم.
+</p>
+```{r}
+selectedHealthIndicators <- c(
+    "Age dependency ratio (% of working-age population)",
+    "Birth rate, crude (per 1,000 people)",
+    "Death rate, crude (per 1,000 people)",
+    "Fertility rate, total (births per woman)",
+    "Life expectancy at birth, female (years)",
+    "Life expectancy at birth, male (years)",
+    "Life expectancy at birth, total (years)",
+    "Mortality rate, infant (per 1,000 live births)",
+    "Mortality rate, neonatal (per 1,000 live births)",
+    "Mortality rate, under-5 (per 1,000 live births)",
+    "Population ages 0-14 (% of total)",
+    "Population ages 15-64 (% of total)",
+    "Population ages 65 and above (% of total)",
+    "Population growth (annual %)",
+    "Population, female (% of total)",
+    "Population, male (% of total)",
+    "Population, total",
+    "Prevalence of HIV, female (% ages 15-24)",
+    "Prevalence of HIV, male (% ages 15-24)",
+    "Prevalence of HIV, total (% of population ages 15-49)"
+)
+selectedEducationIndicators = fullDataEducationIndicators$`Indicator Name`
+# check wether selected appropriate indicators
+selectedHealthIndicators %in% fullDataHealthIndicators$`Indicator Name`
+```
+<p dir="RTL">
+نمودارهای مربوط به شاخص های بخش سلامت:
+</p>
+```{r}
+for(indicator in selectedHealthIndicators){
+  iran = fullDataHealthIndicators %>% filter(`Indicator Name` == indicator) %>% .[,4:25] %>% gather()
+  world = WDIData %>% filter(`Indicator Name` == indicator) %>% summarise(`1995` = mean(`1995`, na.rm = T), `1996` = mean(`1996`, na.rm = T), `1997` = mean(`1997`, na.rm = T), `1998` = mean(`1998`, na.rm = T), `1999` = mean(`1999`, na.rm = T), `2000` = mean(`2000`, na.rm = T), `2001` = mean(`2001`, na.rm = T), `2002` = mean(`2002`, na.rm = T), `2003` = mean(`2003`, na.rm = T), `2004` = mean(`2004`, na.rm = T),`2005` = mean(`2005`, na.rm = T) ,`2006` = mean(`2006`, na.rm = T), `2007` = mean(`2007`, na.rm = T), `2008` = mean(`2008`, na.rm = T), `2009` = mean(`2009`, na.rm = T), `2010` = mean(`2010`, na.rm = T), `2011` = mean(`2011`, na.rm = T), `2012` = mean(`2012`, na.rm = T), `2013` = mean(`2013`, na.rm = T), `2014` = mean(`2014`, na.rm = T), `2015` = mean(`2015`, na.rm = T), `2016` = mean(`2016`, na.rm = T)) %>% gather()
+  iran$key = as.integer(iran$key)
+  world$key = as.integer(world$key)
+  print(ggplot() + geom_line(data = iran, aes(key, value, color = "Iran")) + geom_line(data = world, aes(key, value, color = "World")) + xlab("Year") + ylab(indicator) + theme_minimal())
+}
+```
+<p dir="RTL">
+نمودارهای مربوط به شاخص های بخش آموزش:
+</p>
+```{r}
+for(indicator in selectedEducationIndicators){
+  iran = fullDataEducationIndicators %>% filter(`Indicator Name` == indicator) %>% .[,4:25] %>% gather()
+  world = WDIData %>% filter(`Indicator Name` == indicator) %>% summarise(`1995` = mean(`1995`, na.rm = T), `1996` = mean(`1996`, na.rm = T), `1997` = mean(`1997`, na.rm = T), `1998` = mean(`1998`, na.rm = T), `1999` = mean(`1999`, na.rm = T), `2000` = mean(`2000`, na.rm = T), `2001` = mean(`2001`, na.rm = T), `2002` = mean(`2002`, na.rm = T), `2003` = mean(`2003`, na.rm = T), `2004` = mean(`2004`, na.rm = T),`2005` = mean(`2005`, na.rm = T) ,`2006` = mean(`2006`, na.rm = T), `2007` = mean(`2007`, na.rm = T), `2008` = mean(`2008`, na.rm = T), `2009` = mean(`2009`, na.rm = T), `2010` = mean(`2010`, na.rm = T), `2011` = mean(`2011`, na.rm = T), `2012` = mean(`2012`, na.rm = T), `2013` = mean(`2013`, na.rm = T), `2014` = mean(`2014`, na.rm = T), `2015` = mean(`2015`, na.rm = T), `2016` = mean(`2016`, na.rm = T)) %>% gather()
+  iran$key = as.integer(iran$key)
+  world$key = as.integer(world$key)
+  print(ggplot() + geom_line(data = iran, aes(key, value, color = "Iran")) + geom_line(data = world, aes(key, value, color = "World")) + xlab("Year") + ylab(indicator) + theme_minimal())
+}
+```
+<p dir="RTL">
+حال کلاسترینگ به سه دسته را با توجه به داده های مربوط به بخش سلامت انجام می دهیم و نتیجه را بر روی نمودار PC1 و PC2 نمایش می دهیم.
+</p>
+```{r}
+clustering.matrix = matrix(ncol = 20, nrow = 48)
+rownames(clustering.matrix) = c(unique(WDIData$`Country Name`)[1:47], "Iran")
+colnames(clustering.matrix) = selectedHealthIndicators
+i = 1
+for(indicator in selectedHealthIndicators){
+  iran = mean((fullDataHealthIndicators %>% filter(`Indicator Name` == indicator) %>% .[,4:25] %>% gather())$value)
+  WDIData %>% filter(`Indicator Name` == indicator) %>% rowwise() %>% mutate(Average = mean(c(`1995`, `1996`,`1997` ,`1998`, `1999`, `2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) -> average
+  clustering.matrix[,i] = c(average$Average[1:47], iran)
+  i=i+1
+}
+#remove NA columns
+clustering.matrix = clustering.matrix[, -c(18,19,20)]
+clustering.matrix = na.omit(clustering.matrix)
+cluster.frame = data.frame(Class = rownames(clustering.matrix), Cluster = kmeans(clustering.matrix, 3)$cluster)
+#pca
+healthIndicator.pca = prcomp(clustering.matrix)
+pca.cluster.frame = data.frame(Class = rownames(clustering.matrix), PC1 = healthIndicator.pca$x[,1], PC2 = healthIndicator.pca$x[,2], Cluster = cluster.frame$Cluster)
+hchart(pca.cluster.frame, type = "point", hcaes(PC1, PC2, color = Cluster, group = Class)) %>% hc_legend(enabled = F)
+```
+<p dir="RTL">
+این باز نتیجه کلاسترینگ بسیار جالب است و نشان دهنده این است که ایران در شاخص های سلامتی هم گروه کشورهای اروپایی و آمریکای شمالی قرار داد.
+<br>
+حال این مراحل را برای شاخص های آموزش انجام می دهیم و نتیجه را بررسی می کنیم.
+</p>
+```{r}
+clustering.matrix = matrix(ncol = 5, nrow = 48)
+rownames(clustering.matrix) = c(unique(WDIData$`Country Name`)[1:47], "Iran")
+colnames(clustering.matrix) = selectedEducationIndicators
+i = 1
+for(indicator in selectedEducationIndicators){
+  iran = mean((fullDataEducationIndicators %>% filter(`Indicator Name` == indicator) %>% .[,4:25] %>% gather())$value)
+  WDIData %>% filter(`Indicator Name` == indicator) %>% rowwise() %>% mutate(Average = mean(c(`1995`, `1996`,`1997` ,`1998`, `1999`, `2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) -> average
+  clustering.matrix[,i] = c(average$Average[1:47], iran)
+  i=i+1
+}
+#remove NA columns
+clustering.matrix = clustering.matrix[, -c(1,4)]
+clustering.matrix = na.omit(clustering.matrix)
+cluster.frame = data.frame(Class = rownames(clustering.matrix), Cluster = kmeans(clustering.matrix, 3)$cluster)
+#pca
+educationIndicator.pca = prcomp(clustering.matrix)
+pca.cluster.frame = data.frame(Class = rownames(clustering.matrix), PC1 = educationIndicator.pca$x[,1], PC2 = educationIndicator.pca$x[,2], Cluster = cluster.frame$Cluster)
+hchart(pca.cluster.frame, type = "point", hcaes(PC1, PC2, color = Cluster, group = Class)) %>% hc_legend(enabled = F)
+```
+<p dir="RTL">
+در شاخص های آموزشی نیز ایران در گروه کشورهای عربی و خاورمیانه قرار گرفته که به دلیل کم بودن شاخص های مورد بررسی می تواند نتیجه نادقیقی باشد.
+</p>
+
+
+***
+
+<p dir="RTL"> 
+۱۰. کشورهای دنیا را بر حسب ۶۰ شاخص اقتصادی، سلامت و آموزش با روش سلسله مراتبی خوشه بندی کرده و دندروگرام آن را رسم نمایید. اگر داده ها بر سه دسته تقسیم شوند ایران در کدام دسته می گنجد؟
+</p>
+```{r}
+clustering.matrix = matrix(ncol = 45, nrow = 264-47)
+rownames(clustering.matrix) = c(unique(WDIData$`Country Name`)[48:264])
+colnames(clustering.matrix) = c(selectedEconomicIndicators, selectedHealthIndicators, selectedEducationIndicators)
+i = 1
+for(indicator in selectedEconomicIndicators){
+  WDIData %>% filter(`Indicator Name` == indicator) %>% rowwise() %>% mutate(Average = mean(c(`1995`, `1996`,`1997` ,`1998`, `1999`, `2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) -> average
+  clustering.matrix[,i] = c(average$Average[48:264])
+  i=i+1
+}
+for(indicator in selectedHealthIndicators){
+  WDIData %>% filter(`Indicator Name` == indicator) %>% rowwise() %>% mutate(Average = mean(c(`1995`, `1996`,`1997` ,`1998`, `1999`, `2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) -> average
+  clustering.matrix[,i] = c(average$Average[48:264])
+  i=i+1
+}
+for(indicator in selectedEducationIndicators){
+  WDIData %>% filter(`Indicator Name` == indicator) %>% rowwise() %>% mutate(Average = mean(c(`1995`, `1996`,`1997` ,`1998`, `1999`, `2000`,`2001`,`2002`,`2003`,`2004`,`2005`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`), na.rm = T)) -> average
+  clustering.matrix[,i] = c(average$Average[48:264])
+  i=i+1
+}
+clustering.matrix = na.omit(clustering.matrix)
+dist = stats::dist(data.frame(clustering.matrix),method = "euclidean")
+clus = hclust(dist,method = "complete")
+plot(clus, hang = -1)
+```
+<p dir="RTL">
+با توجه به دندوگرام به دست آمده، به نظر می رسد ایران در کلاستری جدا از بسیاری کشورهای دیگر قرار گرفته است که علت آن نامعلوم است.
+</p>
+```{r}
+hcut= cutree(clus,k=3)
+hcut[hcut==2]
+```
+<p dir="RTL">
+در این دسته بندی ایران در گروهی در کنار اندونزی قرار گرفته است.
+</p>
+
+
+***
+
+<p dir="RTL"> 
+۱۱. سه یافته جالب از داده ها استخراج کنید.
+</p>
+<p dir="RTL"> 
+بررسی تفاوت امید به زندگی در خانوم ها و آقایان و یافتن کشورهای مناسب تر برای آقایان و خانم ها بر این اساس بررسی ای کاملا جنسیتی و در نوع خود جالب است!
+</p>
+```{r}
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.FE.IN")  %>% .[,-c(2:4,62,63)] %>% gather(`Country Name`) %>% select(Year = `Country Name`, value) %>% filter(!is.na(value)) %>% group_by(Year) %>% summarise(AverageLifeExpectance = mean(value)) -> femaleLife
+
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.MA.IN")  %>% .[,-c(2:4,62,63)] %>% gather(`Country Name`) %>% select(Year = `Country Name`, value) %>% filter(!is.na(value)) %>% group_by(Year) %>% summarise(AverageLifeExpectance = mean(value)) -> maleLife
+
+highchart() %>% hc_add_series(data = femaleLife, type = "line", hcaes(x = as.numeric(Year), y = AverageLifeExpectance), name = "Female") %>% hc_add_series(data = maleLife, type = "line", hcaes(x = as.numeric(Year), y = AverageLifeExpectance), name = "Male") 
+```
+<p dir="RTL">
+به نظر می رسد همواره در طول تاریخ امید به زندگی خانم ها ۲ تا ۵ سال بیشتر از آقایان بوده است!
+</p>
+```{r}
+countries = unique(WDIData$`Country Name`)[-(1:47)]
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.FE.IN" & `Country Name` %in% countries)  %>% .[,-c(2:4,62,63)] %>% gather(`Country Name`) %>% select(Year = `Country Name`, value) -> femaleLifeCountryBased
+femaleLifeCountryBased$Country = rep(countries, length(unique(femaleLifeCountryBased$Year)))
+femaleLifeCountryBased = femaleLifeCountryBased %>% group_by(Country) %>% summarise(AverageLifeExpectance = mean(value, na.rm = T)) %>% filter(!is.na(AverageLifeExpectance)) %>% select(Country, AverageFemaleLifeExpectance = AverageLifeExpectance)
+
+WDIData %>% filter(`Indicator Code` == "SP.DYN.LE00.MA.IN" & `Country Name` %in% countries)  %>% .[,-c(2:4,62,63)] %>% gather(`Country Name`) %>% select(Year = `Country Name`, value) -> maleLifeCountryBased
+maleLifeCountryBased$Country = rep(countries, length(unique(maleLifeCountryBased$Year)))
+maleLifeCountryBased = maleLifeCountryBased %>% group_by(Country) %>% summarise(AverageLifeExpectance = mean(value, na.rm = T)) %>% filter(!is.na(AverageLifeExpectance)) %>% select(Country, AverageMaleLifeExpectance = AverageLifeExpectance)
+
+merge(femaleLifeCountryBased, maleLifeCountryBased) %>% mutate(Diff = AverageFemaleLifeExpectance - AverageMaleLifeExpectance) %>% arrange(desc(Diff)) -> sexedLifeExpectance
+
+hchart(sexedLifeExpectance, "line", hcaes(Country, Diff), name = "Life Expectance Difference") %>% hc_add_theme(hc_theme_smpl())
+```
+<p dir="RTL">
+نمودار بالا نشان می دهد در هیچ کشوری امید به زندگی برای آقایان بیشتر از خانم ها نیست که جای تاسف دارد! با توجه به نتایج به دست آمده زنان کشورهای روسیه، قزاقستان، جمهوری لتونی و استونی چیزی حدود بیش از ۱۰ سال بیشتر از مردان این کشورها زندگی می کنند و در مقابل مردان کشورهای مالدیو، هند، بوتان و بنگلادش از بیشترین شانس برای زندگی پا به پای زنان این کشورها دارند!
+<p>
+```{r}
+sexedLifeExpectance %>% arrange(desc(AverageMaleLifeExpectance)) %>% head(5)
+sexedLifeExpectance %>% arrange(desc(AverageFemaleLifeExpectance)) %>% head(5)
+```
+<p dir="RTL">
+در نهایت هم می توان دید که هم برای آقایان و هم برای خانم هایی که دوست دارند از شانس زندگی بیشتری برخوردار باشند سن مارینو، جزایر کیمن، لیختناشتاین، جزایر فارو و برمودا مکان های مناسبی می باشند!
+</p>
+
+

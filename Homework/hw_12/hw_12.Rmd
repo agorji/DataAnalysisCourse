@@ -1,0 +1,252 @@
+---
+title: "Association rules"
+subtitle: "Movie recommender systems"
+author: "Ali Gorji"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/rs_cover.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با استفاده از داده نظرهای فیلم به سوالات زیر پاسخ دهید.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+# Read Data
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(highcharter)
+library(wordcloud2)
+library(tm)
+library(arules)
+library(corrplot)
+
+# Movies
+movie.str = read_lines('data/ml-10M100K/movies.dat') %>% str_replace_all("::", "**") %>% str_replace_all("\"", "")
+movie = read_delim(movie.str %>% paste(collapse = "\n"),delim = "**" ,col_names = c("MovieID",NA,"Title",NA,"Genres"))
+movie$Year = str_sub(str_sub(movie$Title, -5),1,4)
+movie = movie %>% filter(!is.na(as.numeric(Year)) & as.numeric(Year)>1000 & !is.na(Genres)) %>%  select(1,3,5,6)
+generedMovie = data.frame()
+for(i in 1:length(movie$Genres)){
+  for(genre in str_split(movie$Genres[i], "\\|")[[1]]){
+    temp = movie[i,]
+    temp$Genre = genre
+    generedMovie = rbind(generedMovie, temp)
+  }
+}
+
+# Tags
+tag = read_delim('data/ml-10M100K/tags.dat',delim = "::" ,col_names = c("UserID",NA,"MovieID",NA,"Tag",NA,"Timestamp"))
+tag = tag %>% select(1,3,5,7) 
+
+# Ratings
+rating.str = read_lines('data/ml-10M100K/ratings.dat') %>% str_replace_all("::", "**") %>% str_replace_all("\"", "")
+rating = read_delim(rating.str %>% paste(collapse = "\n"),delim = "**" ,col_names = c("UserID",NA,"MovieID",NA,"Rating",NA,"Timestamp"))
+rating = rating %>% select(1,3,5,7)
+```
+
+***
+
+<p dir="RTL">
+۱. آماره های زیر را بیابید.
+الف. محبوب ترین فیلم کدام است؟
+ب. بیشترین نظرات درباره چه فیلمی داده شده است؟
+پ. منفورترین فیلم کدام است؟
+ت. تعداد فیلم های ساخته شده در هر سال
+ث. در هر سالی مردم به چه ژانری علاقه مند بوده اند.
+</p>
+
+```{r}
+movieSummary = rating %>% group_by(MovieID) %>% summarise(Rating = mean(Rating), RateCount = n()) %>% merge(movie, by = "MovieID")
+paste("Most Popular:")
+movieSummary %>% arrange(desc(Rating)) %>% head(1) %>% .$Title
+paste("Most Rated:")
+movieSummary %>% arrange(desc(RateCount)) %>% head(1) %>% .$Title
+paste("Least Popular:")
+movieSummary %>% arrange(Rating) %>% head(1) %>% .$Title
+paste("Yearly Movie Count:")
+movieSummary %>% group_by(Year) %>% summarise(Count = n()) %>% arrange(desc(Count))
+paste("Yearly Popular Genres:")
+rating %>% group_by(MovieID) %>% summarise(Rating = mean(Rating), RateCount = n()) %>% merge(generedMovie, by = "MovieID") %>% group_by(Year, Genre) %>% summarise(Count = n()) %>% ungroup() %>% group_by(Year) %>% arrange(desc(Count)) %>% slice(1) %>% arrange(desc(Count))
+```
+
+
+
+***
+
+<p dir="RTL">
+۲. ژانر فیلم ها را استخراج نمایید.  سپس آماره های زیر را استخراج نمایید.
+الف. نمودار ستونی تعداد فیلم های هر ژانر
+</p>
+```{r}
+hchart(generedMovie %>% group_by(Genre) %>% summarise(Count = n()) %>% arrange(desc(Count)), type = "bar", hcaes(Genre, Count)) %>% 
+  hc_add_theme(hc_theme_sandsignika())
+```
+<p dir="RTL">
+ب. نمودار همبستگی ژانرها
+</p>
+```{r}
+library(tidyr)
+genere.matrix = generedMovie %>% mutate(s = T) %>% spread(Genre, s) %>% .[,-(1:4)] %>% as.matrix()
+genere.matrix[is.na(genere.matrix)] = F
+cor(genere.matrix) %>% corrplot()
+```
+<p dir="RTL">
+پ. متوسط امتیاز به هر ژانر
+</p>
+```{r}
+rating %>% group_by(MovieID) %>% summarise(Rating = mean(Rating), RateCount = n()) %>% merge(generedMovie , by = "MovieID") %>% ungroup() %>% group_by(Genre) %>% summarise(AverageRate = mean(Rating)) %>% arrange(desc(AverageRate))
+```
+<p dir="RTL">
+ت. دوران طلایی فیلم سازی 
+</p>
+```{r}
+movieSummary %>% group_by(Year) %>% summarise(AverageRate = mean(Rating)) %>% arrange(desc(AverageRate)) %>% head(5)
+```
+
+
+***
+
+<p dir="RTL">
+۳. نمودار ابر لغات را بر حسب کلمات عنوان فیلم ها رسم نمایید.
+</p>
+```{r}
+stopWords = stopwords() %>% c("mr", "mrs", "sir", "well", "doctor", "miss", "will", "might", "must")
+removeStopWords = function(inputText){
+  cleaned = tolower(inputText)
+  for(word in stopWords){
+    word = paste("\\b",word,"\\b",sep = "")
+    cleaned = str_remove_all(cleaned, word)
+  }
+  cleaned = str_replace_all(cleaned, "[[:punct:]]", " ")
+  for(word in c("s", "d")){
+    word = paste("\\b",word,"\\b",sep = "")
+    cleaned = str_remove_all(cleaned, word)
+  }
+  return(cleaned)
+}
+makeWordFrame = function(inputText){
+  word_list <- str_split(inputText, "\\s+") %>% unlist()
+  word.frame <- word_list[word_list!=""] %>% table() %>% as.data.frame(stringsAsFactors = F) %>% arrange(desc(Freq)) %>% return()
+}
+names = str_sub(movie$Title, 1, -8)
+names = removeStopWords(names)
+names.frame = makeWordFrame(names) %>% select(Word = 1, Frequency = Freq) %>% filter(str_length(Word)>2)
+wordcloud2(names.frame %>% head(500), size = .5)
+```
+
+
+***
+
+<p dir="RTL">
+۴. با استفاده از قوانین همبستگی یک توصیه گر برای فیلم ها بسازید. شبیه ترین فیلم ها به لیست زیر را پیدا کنید.
+</p>
+
+* Castle in the Sky (1986)
+* Cast Away (2000)
+* No Country for Old Men (2007)
+* Memento (2000)
+
+```{r message=FALSE, warning=FALSE}
+i = 1
+userSeen = rating %>% group_by(UserID) %>% summarise(Seen = paste(MovieID, collapse = " "))
+write_data = paste(userSeen$Seen, collapse = "\n")
+write(write_data, file = "seen_data");
+seen.trans = read.transactions("seen_data", format = "basket", sep=" ");
+
+mrules = apriori(seen.trans, parameter = list(support = 0.002, confidence = 0.2, minlen = 2, maxlen = 2))
+
+mrules.frame = mrules %>% DATAFRAME()  %>% mutate(LHS = str_sub(LHS, 2,-2), RHS = str_sub(RHS, 2,-2)) %>% merge(movie %>% select(MovieID, LHSTitle = Title), by.x = "LHS", by.y = "MovieID") %>% merge(movie %>% select(MovieID, RHSTitle = Title), by.x = "RHS", by.y = "MovieID") %>% arrange(desc(lift))
+mrules.frame %>% filter(LHSTitle == "Castle in the Sky (Tenkû no shiro Rapyuta) (1986)" | LHSTitle == "Cast Away (2000)" | LHSTitle == "No Country for Old Men (2007)" | LHSTitle == "Memento (2000)") %>% arrange(desc(lift)) %>% group_by(LHS) %>% top_n(5, wt = lift)
+```
+
+
+***
+
+<p dir="RTL">
+۵. تمرین سخت: در گیت هاب برای خود اکانت درست کنید. همه تمرین های خود را آنجا بارگذاری کنید! و لینک آن را ارسال نمایید.
+</p>
+<p><a href="https://github.com/agorji/DataAnalysisCourse">https://github.com/agorji/DataAnalysisCourse</a></p>
+***
+
+<p dir="RTL">
+۶. پنج انتقاد از درس و نحوه تدریس را بیان کنید.
+</p>
+
+<p dir="RTL">
+در مجموع از جنبه نحوه تدریس و نحوه پوشش دادن مباحث یکی از بهترین درس هایی بود که در آن حضور داشتم و از پربازده ترین کلاس های کارشناسی برای من بود.
+<br>
+انتقاد ها:
+<br>
+۱- تمارین در بسیاری موارد دارای سوالات گنگی بود که برخی از آن ها حتا تا زمان تحویل نیز شفاف سازی نمی شدند و سلیقه ای انجام می شدند.
+<br>
+۲- در رابطه با پروژه درس صحبت خاصی نه در سر کلاس و نه در کلاس تی ای نشد و به نظر بنده جا داشت کمی بیشتر در رابطه با روند انجام پروژه، ویژگی های یک پروژه مناسب و نحوه نوشتن گزارش های اولیه و نهایی صحبت می شد
+<br>
+۳- درس های نهایی (دقیقا از شروع مبحث PCA) به طور جزئی بسط داده نشدند و تمارین آن ها نیز در حد مطالب گفته شده در کلاس درسی بود و با توجه به اهمیت و کاربردی بودن آن ها جایز بود در حد دروس اولیه به خوبی بسط داده شوند و زوایای مختلف آن ها بررسی شود.
+<br>
+۴- در کلاس حل تمرین بیشتر به مباحث تئوری پرداخته می شد و با اینکه به نظر بنده نیز اتفاق مناسبی بود که جذابیت متفاوتی برای علاقه مندان به مطالقب تئوری ایجاد می کرد، خوب بود کلاس حل تمرینی همگام تر با درس نیز برگزار می شد.
+<br>
+۵- ساعت کلاس اگر به ۹ تا ۱۱ منتقل می شد به نظر از مشارکت بیشتر و بازدهی بهتری برخوردار می شد :)
+</p>
+***
+
+<p dir="RTL">
+۷. پنج پیشنهاد برای بهتر شدن درس بیان کنید.
+۱- تقسیم زمان کلاس به دو بخش تئوری و کاربردی تا ابتدا تئوری مطالب به دقت بیان شوند و در نیمه دوم به مشاهده تئوری در عمل پرداخته شود (که تا حد خوبی همین روال بود ولی نظام مند شدن آن کمک بیشتری به دانشجویان می کند)
+<br>
+۲- ارائه راهنمایی و یا پاسخ برای تمارین
+<br>
+۳- در نظر گرفتن کوپن های تاخیر برای دانشجویان تا بخشی از دانشجویان که در رسیدن به زمان تمارین مشکل دارند باعث از بین رفتن برنامه در نظر گرفته شده نداشته باشند.
+<br>
+۴- ارائه مسائل دنیای واقعی داده در تمارین و جلسات نهایی تا دانش آموزان بتوانند شهود کلی خود از درس را محک بزنند.
+<br>
+۵- ارائه مقالات یا متونی به عنوان مطالعه آزاد تا افرادی که تمایل به گذاشتن وقت بیشتر و کسب دانش بیشتر در موضوع خاصی دارند بتوانند با آن درگیر شوند.
+</p>
+***
+
+<p dir="RTL">
+۸. سه موضوع آماری جدید برای جایگزینی در سرفصل ها پیشنهاد دهید.
+<br>
+به نظر بنده موضوعات مطرح شده بسیار قابل قبول هستند و نیاز به جایگزینی ندارند. اما پرداحتن به موضوعات زیر نیز خالی از لطف نیست:
+<br>
+۱- پرداختن بیشتر به مبحث parameter estimation و کار کردن بر روی فیت کردن بهترین توزیع آماری به داده ها.
+<br>
+۲- کار کردن با مسائل حوزه مجموعه های زمانی و پردازش سیگنال برای تشخیص مواردی همچوت اتفاقات ناگهانی و fraud detectoin
+<br>
+۳- آنالیز خروجی و بازه های اطمینان برای مباحث مربوط به شبیه سازی
+</p>
+
+***
+
+<p dir="RTL"> 
+۹. سه داده جالب برای کار در کلاس پیشنهاد دهید.
+<br>
+۱- داده مربوط به علوم بیولوژی من جمله بررسی های ژنومی و یا داده های بالینی
+<br>
+۲- داده های ترافیکی مربوط به تهران برای بررسی های مختلف آماری و تصویرسازی
+<br>
+۳- داده های مربوط به کنکور سراسری که با توجه به پیشینه دانشجویان و علاقه همگی آن ها به مهندسی کنکور می تواند داده های جذابی باشد!
+</p>
+
+***
+
+<p dir="RTL"> 
+۱۰. چهار نکته مهمی که در کلاس یاد گرفتید را بیان کنید.
+<br>
+۱- ویژوالیزیشن کامل از بخش های مهم کارهای آماری است که کم کاری در آن می تواند ارزش کارهای آماری قوی را پایین بیاورد.
+<br>
+۲- در مدل های خطی لزومن خطای پایین در مواجهه با داده های موجود نمی تواند معیار مناسبی برای ارزیابی باشد؛ چرا که همواره در معرض مشکل اورفیت شدن هستیم!
+<br>
+۳- در صورت زیاد بودن ابعاد ماتریس فیچرهایمان برای بررسی های نموداری می توانیم از pca استفاده کنیم.
+<br>
+۴- Practice makes perfect!
+</p>
+
